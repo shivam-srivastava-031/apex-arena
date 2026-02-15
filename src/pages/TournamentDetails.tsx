@@ -1,12 +1,13 @@
 import { useParams, Link } from 'react-router-dom';
+import { useState } from 'react';
 import { MainLayout } from '@/components/MainLayout';
 import { tournaments, teams, leaderboardData } from '@/data/mock';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Calendar, Users, DollarSign, Trophy, ArrowLeft, Swords, Target } from 'lucide-react';
-import { toast } from 'sonner';
+import { Calendar, Users, DollarSign, Trophy, ArrowLeft, Target, CheckCircle } from 'lucide-react';
+import { TournamentBracket } from '@/components/TournamentBracket';
+import { RegistrationModal } from '@/components/RegistrationModal';
 
 const statusStyles: Record<string, string> = {
   registration: 'bg-primary/15 text-primary',
@@ -17,6 +18,8 @@ const statusStyles: Record<string, string> = {
 const TournamentDetails = () => {
   const { id } = useParams();
   const tournament = tournaments.find((t) => t.id === id);
+  const [regOpen, setRegOpen] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
 
   if (!tournament) {
     return (
@@ -30,10 +33,6 @@ const TournamentDetails = () => {
       </MainLayout>
     );
   }
-
-  const handleRegister = () => {
-    toast.success('Registration successful! Your team has been registered.');
-  };
 
   return (
     <MainLayout>
@@ -70,11 +69,41 @@ const TournamentDetails = () => {
           ))}
         </div>
 
+        {/* Register / Registered / Cancel */}
         {tournament.status === 'registration' && (
-          <Button size="lg" className="gradient-primary mb-8 w-full border-0 font-semibold shadow-glow md:w-auto" onClick={handleRegister}>
-            Register Team
-          </Button>
+          <div className="mb-8 flex flex-wrap gap-3">
+            {isRegistered ? (
+              <>
+                <Button size="lg" disabled className="gap-2 bg-success/20 text-success">
+                  <CheckCircle className="h-4 w-4" /> Registered
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="text-destructive hover:bg-destructive/10"
+                  onClick={() => setIsRegistered(false)}
+                >
+                  Cancel Registration
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="lg"
+                className="gradient-primary border-0 font-semibold shadow-glow md:w-auto"
+                onClick={() => setRegOpen(true)}
+              >
+                Register Team
+              </Button>
+            )}
+          </div>
         )}
+
+        <RegistrationModal
+          tournament={tournament}
+          open={regOpen}
+          onOpenChange={setRegOpen}
+          onRegistered={() => setIsRegistered(true)}
+        />
 
         {/* Tabs */}
         <Tabs defaultValue="overview">
@@ -147,13 +176,7 @@ const TournamentDetails = () => {
           </TabsContent>
 
           <TabsContent value="bracket">
-            <div className="gaming-card flex flex-col items-center p-12 text-center">
-              <Swords className="mb-4 h-12 w-12 text-muted-foreground/40" />
-              <h3 className="font-display text-lg font-bold">Bracket Coming Soon</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                The bracket will be generated once registration closes.
-              </p>
-            </div>
+            <TournamentBracket />
           </TabsContent>
 
           <TabsContent value="leaderboard">

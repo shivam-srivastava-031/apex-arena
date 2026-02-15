@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
 import { MainLayout } from '@/components/MainLayout';
 import { TournamentCard } from '@/components/TournamentCard';
+import { FloatingIcons } from '@/components/FloatingIcons';
+import { useCountUp } from '@/hooks/useCountUp';
 import { tournaments } from '@/data/mock';
 import { Button } from '@/components/ui/button';
-import { UserPlus, Users, ClipboardList, Trophy, Zap, Shield, Target } from 'lucide-react';
+import { UserPlus, Users, ClipboardList, Trophy, Zap, Shield } from 'lucide-react';
 
 const featuredTournaments = tournaments.filter((t) => t.status !== 'completed').slice(0, 3);
 
@@ -14,12 +16,17 @@ const steps = [
   { icon: Trophy, title: 'Compete & Win', desc: 'Battle it out and climb the leaderboard for prizes.' },
 ];
 
-const stats = [
-  { value: '10K+', label: 'Players' },
-  { value: '500+', label: 'Tournaments' },
-  { value: '₹50L+', label: 'Prize Money' },
-  { value: '1K+', label: 'Teams' },
-];
+function CountUpStat({ target, suffix, label }: { target: number; suffix: string; label: string }) {
+  const { count, ref } = useCountUp(target);
+  return (
+    <div ref={ref}>
+      <div className="font-display text-3xl font-black text-primary-foreground">
+        {count.toLocaleString()}{suffix}
+      </div>
+      <div className="text-sm text-primary-foreground/60">{label}</div>
+    </div>
+  );
+}
 
 const Index = () => {
   return (
@@ -30,6 +37,7 @@ const Index = () => {
           <div className="absolute -left-20 top-1/4 h-72 w-72 rounded-full bg-primary blur-[100px]" />
           <div className="absolute -right-20 top-1/3 h-96 w-96 rounded-full bg-secondary blur-[120px]" />
         </div>
+        <FloatingIcons />
         <div className="relative mx-auto flex max-w-7xl flex-col items-center px-4 py-24 text-center md:py-36">
           <div className="animate-fade-up mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
             <Zap className="h-4 w-4" /> Season 4 Now Live
@@ -50,14 +58,12 @@ const Index = () => {
             </Button>
           </div>
 
-          {/* Stats */}
+          {/* Stats with count-up */}
           <div className="animate-fade-up-delay-3 mt-16 grid grid-cols-2 gap-6 md:grid-cols-4 md:gap-12">
-            {stats.map((s) => (
-              <div key={s.label}>
-                <div className="font-display text-3xl font-black text-primary-foreground">{s.value}</div>
-                <div className="text-sm text-primary-foreground/60">{s.label}</div>
-              </div>
-            ))}
+            <CountUpStat target={10} suffix="K+" label="Players" />
+            <CountUpStat target={500} suffix="+" label="Tournaments" />
+            <CountUpStat target={50} suffix="L+" label="Prize Money (₹)" />
+            <CountUpStat target={1000} suffix="+" label="Teams" />
           </div>
         </div>
       </section>
@@ -74,8 +80,10 @@ const Index = () => {
           </Button>
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {featuredTournaments.map((t) => (
-            <TournamentCard key={t.id} tournament={t} />
+          {featuredTournaments.map((t, i) => (
+            <div key={t.id} className="animate-fade-up" style={{ animationDelay: `${i * 0.1}s` }}>
+              <TournamentCard tournament={t} />
+            </div>
           ))}
         </div>
         <div className="mt-6 text-center md:hidden">
@@ -94,7 +102,7 @@ const Index = () => {
           </div>
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
             {steps.map((step, i) => (
-              <div key={step.title} className="gaming-card flex flex-col items-center p-6 text-center">
+              <div key={step.title} className="gaming-card animate-fade-up flex flex-col items-center p-6 text-center" style={{ animationDelay: `${i * 0.1}s` }}>
                 <div className="gradient-primary mb-4 flex h-14 w-14 items-center justify-center rounded-xl shadow-glow">
                   <step.icon className="h-7 w-7 text-primary-foreground" />
                 </div>

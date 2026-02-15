@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Moon, Sun, Bell, User, LogOut, Trophy } from 'lucide-react';
+import { Menu, X, Moon, Sun, User, LogOut, Trophy } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Button } from '@/components/ui/button';
+import { NotificationDropdown } from '@/components/NotificationDropdown';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +30,6 @@ export function Navbar() {
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-        {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
           <div className="gradient-primary flex h-9 w-9 items-center justify-center rounded-lg">
             <Trophy className="h-5 w-5 text-primary-foreground" />
@@ -37,7 +37,6 @@ export function Navbar() {
           <span className="font-display text-lg font-bold tracking-wider">ARENA</span>
         </Link>
 
-        {/* Desktop Nav */}
         <div className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => (
             <Link
@@ -54,7 +53,6 @@ export function Navbar() {
           ))}
         </div>
 
-        {/* Right side */}
         <div className="hidden items-center gap-2 md:flex">
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="rounded-full">
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -62,10 +60,7 @@ export function Navbar() {
 
           {isAuthenticated ? (
             <>
-              <Button variant="ghost" size="icon" className="relative rounded-full">
-                <Bell className="h-4 w-4" />
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
-              </Button>
+              <NotificationDropdown />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -82,6 +77,11 @@ export function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard" className="cursor-pointer gap-2">
                       <User className="h-4 w-4" /> Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin" className="cursor-pointer gap-2">
+                      <Trophy className="h-4 w-4" /> Admin Panel
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -103,13 +103,11 @@ export function Navbar() {
           )}
         </div>
 
-        {/* Mobile toggle */}
         <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
       </div>
 
-      {/* Mobile menu */}
       {mobileOpen && (
         <div className="border-t border-border bg-card px-4 pb-4 pt-2 md:hidden">
           {navLinks.map((link) => (
