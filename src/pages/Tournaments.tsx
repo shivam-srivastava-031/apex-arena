@@ -4,8 +4,9 @@ import { TournamentCard } from '@/components/TournamentCard';
 import { tournaments } from '@/data/mock';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter, X, Loader2 } from 'lucide-react';
 import { GameType, TournamentStatus } from '@/types';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const gameTypes: GameType[] = ['BGMI', 'FreeFire', 'CODMobile'];
 const statuses: TournamentStatus[] = ['registration', 'live', 'completed'];
@@ -21,14 +22,18 @@ const Tournaments = () => {
   const [selectedStatus, setSelectedStatus] = useState<TournamentStatus | ''>('');
   const [showFilters, setShowFilters] = useState(false);
 
+  const debouncedSearch = useDebounce(search, 300);
+  const isSearching = search !== debouncedSearch;
+
   const filtered = useMemo(() => {
     return tournaments.filter((t) => {
-      const matchSearch = t.name.toLowerCase().includes(search.toLowerCase());
+      const q = debouncedSearch.toLowerCase();
+      const matchSearch = t.name.toLowerCase().includes(q) || t.gameType.toLowerCase().includes(q);
       const matchGame = !selectedGame || t.gameType === selectedGame;
       const matchStatus = !selectedStatus || t.status === selectedStatus;
       return matchSearch && matchGame && matchStatus;
     });
-  }, [search, selectedGame, selectedStatus]);
+  }, [debouncedSearch, selectedGame, selectedStatus]);
 
   const clearFilters = () => {
     setSearch('');
@@ -41,38 +46,40 @@ const Tournaments = () => {
   return (
     <MainLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 md:py-12">
-        {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 animate-fade-up">
           <h1 className="font-display text-3xl font-bold tracking-wider md:text-4xl">TOURNAMENTS</h1>
           <p className="mt-2 text-muted-foreground">Find and join competitive tournaments</p>
         </div>
 
-        {/* Search & filter controls */}
+        {/* Search & filter */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search tournaments..."
+              placeholder="Search by tournament name or game type..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
+              className="pl-10 pr-10"
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
-          >
+          <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="gap-2">
             <Filter className="h-4 w-4" /> Filters
           </Button>
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-destructive">
-              <X className="h-4 w-4" /> Clear
+              <X className="h-4 w-4" /> Clear All
             </Button>
           )}
         </div>
 
-        {/* Filters */}
         {showFilters && (
           <div className="mb-6 rounded-lg border border-border bg-card p-4">
             <div className="flex flex-wrap gap-6">
@@ -113,16 +120,23 @@ const Tournaments = () => {
         )}
 
         {/* Results */}
-        {filtered.length > 0 ? (
+        {isSearching ? (
+          <div className="flex flex-col items-center py-20 text-center">
+            <Loader2 className="mb-4 h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Searching...</p>
+          </div>
+        ) : filtered.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((t) => (
-              <TournamentCard key={t.id} tournament={t} />
+            {filtered.map((t, i) => (
+              <div key={t.id} className="animate-fade-up" style={{ animationDelay: `${i * 0.05}s` }}>
+                <TournamentCard tournament={t} />
+              </div>
             ))}
           </div>
         ) : (
           <div className="flex flex-col items-center py-20 text-center">
             <Search className="mb-4 h-12 w-12 text-muted-foreground/40" />
-            <h3 className="font-display text-lg font-bold">No tournaments found</h3>
+            <h3 className="font-display text-lg font-bold">No results found</h3>
             <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters or search query</p>
           </div>
         )}
