@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { TournamentCard } from '@/components/TournamentCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy } from 'lucide-react';

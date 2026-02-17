@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Users, Trophy, UserPlus, Calendar } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 

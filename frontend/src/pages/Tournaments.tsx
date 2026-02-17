@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { MainLayout } from '@/components/MainLayout';
 import { TournamentCard } from '@/components/TournamentCard';
-import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

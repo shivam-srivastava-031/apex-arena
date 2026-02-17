@@ -4,7 +4,6 @@ import { MainLayout } from '@/components/MainLayout';
 import { TournamentCard } from '@/components/TournamentCard';
 import { FloatingIcons } from '@/components/FloatingIcons';
 import { useCountUp } from '@/hooks/useCountUp';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserPlus, Users, ClipboardList, Trophy, Zap, Shield } from 'lucide-react';
