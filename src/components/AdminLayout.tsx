@@ -1,6 +1,6 @@
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Trophy, Users, Settings, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Trophy, Settings, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useState } from 'react';
 
@@ -40,16 +40,7 @@ export function AdminLayout() {
 
         <nav className="flex-1 p-3">
           {adminNavItems.map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={`mb-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive(item.href)
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
-            >
+            <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)} className={`mb-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isActive(item.href) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
               <item.icon className="h-4 w-4" />
               {item.label}
             </Link>
@@ -60,7 +51,7 @@ export function AdminLayout() {
           <Button asChild variant="ghost" className="w-full justify-start gap-3 text-muted-foreground">
             <Link to="/">← Back to Site</Link>
           </Button>
-          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive" onClick={logout}>
+          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive" onClick={() => logout()}>
             <LogOut className="h-4 w-4" /> Logout
           </Button>
         </div>

@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, profile, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
 
@@ -26,6 +26,7 @@ export function Navbar() {
   ];
 
   const isActive = (path: string) => location.pathname === path;
+  const displayName = profile?.username || user?.email || 'User';
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
@@ -39,15 +40,7 @@ export function Navbar() {
 
         <div className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              to={link.href}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                isActive(link.href)
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
-            >
+            <Link key={link.href} to={link.href} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${isActive(link.href) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
               {link.label}
             </Link>
           ))}
@@ -61,31 +54,26 @@ export function Navbar() {
           {isAuthenticated ? (
             <>
               <NotificationDropdown />
-
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="gap-2 rounded-full pl-2 pr-3">
                     <Avatar className="h-7 w-7">
                       <AvatarFallback className="gradient-primary text-xs text-primary-foreground">
-                        {user?.username?.slice(0, 2).toUpperCase()}
+                        {displayName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium">{user?.username}</span>
+                    <span className="text-sm font-medium">{displayName}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem asChild>
-                    <Link to="/dashboard" className="cursor-pointer gap-2">
-                      <User className="h-4 w-4" /> Dashboard
-                    </Link>
+                    <Link to="/dashboard" className="cursor-pointer gap-2"><User className="h-4 w-4" /> Dashboard</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/admin" className="cursor-pointer gap-2">
-                      <Trophy className="h-4 w-4" /> Admin Panel
-                    </Link>
+                    <Link to="/admin" className="cursor-pointer gap-2"><Trophy className="h-4 w-4" /> Admin Panel</Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout} className="cursor-pointer gap-2 text-destructive">
+                  <DropdownMenuItem onClick={() => logout()} className="cursor-pointer gap-2 text-destructive">
                     <LogOut className="h-4 w-4" /> Logout
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -93,12 +81,8 @@ export function Navbar() {
             </>
           ) : (
             <div className="flex items-center gap-2">
-              <Button variant="ghost" asChild>
-                <Link to="/login">Login</Link>
-              </Button>
-              <Button asChild className="gradient-primary border-0">
-                <Link to="/register">Sign Up</Link>
-              </Button>
+              <Button variant="ghost" asChild><Link to="/login">Login</Link></Button>
+              <Button asChild className="gradient-primary border-0"><Link to="/register">Sign Up</Link></Button>
             </div>
           )}
         </div>
@@ -111,14 +95,7 @@ export function Navbar() {
       {mobileOpen && (
         <div className="border-t border-border bg-card px-4 pb-4 pt-2 md:hidden">
           {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              to={link.href}
-              onClick={() => setMobileOpen(false)}
-              className={`block rounded-lg px-4 py-3 text-sm font-medium ${
-                isActive(link.href) ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
-              }`}
-            >
+            <Link key={link.href} to={link.href} onClick={() => setMobileOpen(false)} className={`block rounded-lg px-4 py-3 text-sm font-medium ${isActive(link.href) ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>
               {link.label}
             </Link>
           ))}
@@ -128,18 +105,12 @@ export function Navbar() {
             </Button>
             {!isAuthenticated && (
               <>
-                <Button variant="ghost" asChild className="flex-1">
-                  <Link to="/login" onClick={() => setMobileOpen(false)}>Login</Link>
-                </Button>
-                <Button asChild className="gradient-primary flex-1 border-0">
-                  <Link to="/register" onClick={() => setMobileOpen(false)}>Sign Up</Link>
-                </Button>
+                <Button variant="ghost" asChild className="flex-1"><Link to="/login" onClick={() => setMobileOpen(false)}>Login</Link></Button>
+                <Button asChild className="gradient-primary flex-1 border-0"><Link to="/register" onClick={() => setMobileOpen(false)}>Sign Up</Link></Button>
               </>
             )}
             {isAuthenticated && (
-              <Button variant="ghost" asChild className="flex-1">
-                <Link to="/dashboard" onClick={() => setMobileOpen(false)}>Dashboard</Link>
-              </Button>
+              <Button variant="ghost" asChild className="flex-1"><Link to="/dashboard" onClick={() => setMobileOpen(false)}>Dashboard</Link></Button>
             )}
           </div>
         </div>

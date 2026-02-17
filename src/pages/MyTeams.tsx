@@ -1,35 +1,82 @@
-import { useState } from 'react';
-import { teams } from '@/data/mock';
-import { TeamCard } from '@/components/TeamCard';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Trophy } from 'lucide-react';
 
 const MyTeams = () => {
-  const myTeams = teams.filter((t) => t.members.some((m) => m.id === 'u1'));
+  const { user } = useAuth();
+  const [teams, setTeams] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [teamName, setTeamName] = useState('');
   const [teamTag, setTeamTag] = useState('');
   const [teamDesc, setTeamDesc] = useState('');
+  const [creating, setCreating] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleCreate = () => {
+  const fetchTeams = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('captain_id', user.id)
+      .order('created_at', { ascending: false });
+    setTeams(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchTeams();
+  }, [user]);
+
+  const handleCreate = async () => {
     const e: Record<string, string> = {};
     if (!teamName.trim()) e.name = 'Team name is required';
     if (!teamTag.trim()) e.tag = 'Tag is required';
     else if (teamTag.length < 2 || teamTag.length > 5) e.tag = '2-5 characters';
     setErrors(e);
     if (Object.keys(e).length > 0) return;
+    if (!user) return;
+
+    setCreating(true);
+    const { data, error } = await supabase
+      .from('teams')
+      .insert({ name: teamName, tag: teamTag.toUpperCase(), description: teamDesc, captain_id: user.id })
+      .select()
+      .single();
+    
+    if (error) {
+      toast.error(error.message);
+      setCreating(false);
+      return;
+    }
+
+    // Add captain as team member
+    if (data) {
+      await supabase.from('team_members').insert({
+        team_id: data.id,
+        user_id: user.id,
+        role: 'captain',
+      });
+    }
 
     toast.success(`Team "${teamName}" created!`);
     setOpen(false);
     setTeamName('');
     setTeamTag('');
     setTeamDesc('');
+    setCreating(false);
+    fetchTeams();
   };
 
   return (
@@ -41,9 +88,7 @@ const MyTeams = () => {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gradient-primary gap-2 border-0">
-              <Plus className="h-4 w-4" /> Create Team
-            </Button>
+            <Button className="gradient-primary gap-2 border-0"><Plus className="h-4 w-4" /> Create Team</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -64,18 +109,31 @@ const MyTeams = () => {
                 <Label>Description (optional)</Label>
                 <Textarea placeholder="Tell us about your team..." value={teamDesc} onChange={(e) => setTeamDesc(e.target.value)} className="mt-1.5" />
               </div>
-              <Button className="gradient-primary w-full border-0 font-semibold" onClick={handleCreate}>
-                Create Team
+              <Button className="gradient-primary w-full border-0 font-semibold" onClick={handleCreate} disabled={creating}>
+                {creating ? 'Creating...' : 'Create Team'}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {myTeams.length > 0 ? (
+      {loading ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {myTeams.map((t) => (
-            <TeamCard key={t.id} team={t} />
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-56 rounded-xl" />)}
+        </div>
+      ) : teams.length > 0 ? (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {teams.map((team) => (
+            <div key={team.id} className="gaming-card flex flex-col items-center p-6 text-center">
+              <div className="gradient-primary mb-4 flex h-20 w-20 items-center justify-center rounded-full text-2xl font-black text-primary-foreground shadow-glow">
+                {team.tag}
+              </div>
+              <h3 className="font-display text-lg font-bold tracking-wide">{team.name}</h3>
+              <span className="mb-4 text-sm text-muted-foreground">[{team.tag}]</span>
+              <Button asChild variant="outline" className="w-full">
+                <Link to={`/dashboard/teams/${team.id}`}>Manage</Link>
+              </Button>
+            </div>
           ))}
         </div>
       ) : (
