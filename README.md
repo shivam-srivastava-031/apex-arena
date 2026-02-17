@@ -139,26 +139,6 @@ npm start
 
 ## 📝 Environment Variables
 
-### Backend (.env)
-```
-NODE_ENV=development
-PORT=5000
-JWT_SECRET=your-secret-key
-DATABASE_URL=your-database-url
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASS=your-app-password
-FRONTEND_URL=http://localhost:5173
-```
-
-### Frontend (.env)
-```
-VITE_SUPABASE_URL=your-supabase-url
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
-VITE_API_URL=http://localhost:5000/api
-```
-
 ## 🧪 Testing
 
 ```bash
