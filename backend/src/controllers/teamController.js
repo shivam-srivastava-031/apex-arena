@@ -1,122 +1,218 @@
-// Mock database - replace with actual database
-const teams = [
-  {
-    id: 1,
-    name: 'Elite Squad',
-    description: 'Professional gaming team',
-    createdBy: 1,
-    members: [1, 2],
-    createdAt: new Date()
-  }
-];
+const Team = require('../models/Team');
+const User = require('../models/User');
 
 const teamController = {
   // Get all teams
-  getAllTeams: (req, res) => {
+  getAllTeams: async (req, res) => {
     try {
+      const teams = await Team.find({ isActive: true })
+        .populate('createdBy', 'username email avatar')
+        .populate('members.user', 'username email avatar level rank')
+        .sort({ createdAt: -1 });
+      
       res.json(teams);
     } catch (error) {
+      console.error('Error fetching teams:', error);
       res.status(500).json({ error: 'Server error' });
     }
   },
 
   // Get team by ID
-  getTeamById: (req, res) => {
+  getTeamById: async (req, res) => {
     try {
-      const team = teams.find(t => t.id === parseInt(req.params.id));
+      const team = await Team.findById(req.params.id)
+        .populate('createdBy', 'username email avatar')
+        .populate('members.user', 'username email avatar level rank stats');
+      
       if (!team) {
         return res.status(404).json({ error: 'Team not found' });
       }
+      
       res.json(team);
     } catch (error) {
+      console.error('Error fetching team:', error);
       res.status(500).json({ error: 'Server error' });
     }
   },
 
   // Create new team
-  createTeam: (req, res) => {
+  createTeam: async (req, res) => {
     try {
-      const { name, description } = req.body;
-      const newTeam = {
-        id: teams.length + 1,
-        name,
-        description,
-        createdBy: req.user?.userId || 1,
-        members: [req.user?.userId || 1],
-        createdAt: new Date()
-      };
+      const { name, tag, description, maxMembers } = req.body;
+      
+      // Check if team name or tag already exists
+      const existingTeam = await Team.findOne({
+        $or: [{ name }, { tag }],
+        isActive: true
+      });
+      
+      if (existingTeam) {
+        return res.status(400).json({ 
+          error: existingTeam.name === name ? 'Team name already taken' : 'Team tag already taken'
+        });
+      }
 
-      teams.push(newTeam);
+      // Create new team
+      const newTeam = new Team({
+        name,
+        tag,
+        description,
+        maxMembers: maxMembers || 4,
+        createdBy: req.user?.userId,
+        members: [{
+          user: req.user?.userId,
+          role: 'Leader',
+          joinedAt: new Date()
+        }]
+      });
+
+      await newTeam.save();
+      
+      // Populate user data for response
+      await newTeam.populate('createdBy', 'username email avatar');
+      await newTeam.populate('members.user', 'username email avatar level rank');
+      
       res.status(201).json(newTeam);
     } catch (error) {
+      console.error('Error creating team:', error);
       res.status(500).json({ error: 'Server error' });
     }
   },
 
   // Update team
-  updateTeam: (req, res) => {
+  updateTeam: async (req, res) => {
     try {
-      const teamIndex = teams.findIndex(t => t.id === parseInt(req.params.id));
-      if (teamIndex === -1) {
+      const { name, description, maxMembers } = req.body;
+      
+      const team = await Team.findById(req.params.id);
+      if (!team) {
         return res.status(404).json({ error: 'Team not found' });
       }
 
-      const { name, description } = req.body;
-      teams[teamIndex] = { ...teams[teamIndex], name, description };
+      // Check if user is team leader
+      const userRole = team.getUserRole(req.user?.userId);
+      if (userRole !== 'Leader') {
+        return res.status(403).json({ error: 'Only team leaders can update team details' });
+      }
 
-      res.json(teams[teamIndex]);
+      // Check if new name conflicts with existing teams
+      if (name && name !== team.name) {
+        const existingTeam = await Team.findOne({ name, isActive: true, _id: { $ne: team._id } });
+        if (existingTeam) {
+          return res.status(400).json({ error: 'Team name already taken' });
+        }
+      }
+
+      // Update team
+      team.name = name || team.name;
+      team.description = description || team.description;
+      team.maxMembers = maxMembers || team.maxMembers;
+
+      await team.save();
+      
+      // Populate user data for response
+      await team.populate('createdBy', 'username email avatar');
+      await team.populate('members.user', 'username email avatar level rank');
+      
+      res.json(team);
     } catch (error) {
+      console.error('Error updating team:', error);
       res.status(500).json({ error: 'Server error' });
     }
   },
 
   // Delete team
-  deleteTeam: (req, res) => {
+  deleteTeam: async (req, res) => {
     try {
-      const teamIndex = teams.findIndex(t => t.id === parseInt(req.params.id));
-      if (teamIndex === -1) {
+      const team = await Team.findById(req.params.id);
+      if (!team) {
         return res.status(404).json({ error: 'Team not found' });
       }
 
-      teams.splice(teamIndex, 1);
+      // Check if user is team leader
+      const userRole = team.getUserRole(req.user?.userId);
+      if (userRole !== 'Leader') {
+        return res.status(403).json({ error: 'Only team leaders can delete team' });
+      }
+
+      // Soft delete by setting isActive to false
+      team.isActive = false;
+      await team.save();
+      
       res.json({ message: 'Team deleted successfully' });
     } catch (error) {
+      console.error('Error deleting team:', error);
       res.status(500).json({ error: 'Server error' });
     }
   },
 
   // Join team
-  joinTeam: (req, res) => {
+  joinTeam: async (req, res) => {
     try {
-      const team = teams.find(t => t.id === parseInt(req.params.id));
+      const team = await Team.findById(req.params.id);
       if (!team) {
         return res.status(404).json({ error: 'Team not found' });
       }
 
-      const userId = req.user?.userId || 1;
-      if (!team.members.includes(userId)) {
-        team.members.push(userId);
+      // Check if user is already a member
+      if (team.isMember(req.user?.userId)) {
+        return res.status(400).json({ error: 'Already a member of this team' });
       }
 
-      res.json({ message: 'Joined team successfully' });
+      // Check if team is full
+      if (team.memberCount >= team.maxMembers) {
+        return res.status(400).json({ error: 'Team is full' });
+      }
+
+      // Add user to team
+      team.members.push({
+        user: req.user?.userId,
+        role: 'Member',
+        joinedAt: new Date()
+      });
+
+      await team.save();
+      
+      // Populate user data for response
+      await team.populate('members.user', 'username email avatar level rank');
+      
+      res.json({ message: 'Joined team successfully', team });
     } catch (error) {
+      console.error('Error joining team:', error);
       res.status(500).json({ error: 'Server error' });
     }
   },
 
   // Leave team
-  leaveTeam: (req, res) => {
+  leaveTeam: async (req, res) => {
     try {
-      const team = teams.find(t => t.id === parseInt(req.params.id));
+      const team = await Team.findById(req.params.id);
       if (!team) {
         return res.status(404).json({ error: 'Team not found' });
       }
 
-      const userId = req.user?.userId || 1;
-      team.members = team.members.filter(memberId => memberId !== userId);
+      // Check if user is a member
+      if (!team.isMember(req.user?.userId)) {
+        return res.status(400).json({ error: 'Not a member of this team' });
+      }
 
+      const userRole = team.getUserRole(req.user?.userId);
+      
+      // Leaders cannot leave, they must delete the team or transfer leadership
+      if (userRole === 'Leader') {
+        return res.status(400).json({ error: 'Team leaders cannot leave. Delete the team or transfer leadership first.' });
+      }
+
+      // Remove user from team
+      team.members = team.members.filter(member => 
+        member.user.toString() !== req.user?.userId.toString()
+      );
+
+      await team.save();
+      
       res.json({ message: 'Left team successfully' });
     } catch (error) {
+      console.error('Error leaving team:', error);
       res.status(500).json({ error: 'Server error' });
     }
   }

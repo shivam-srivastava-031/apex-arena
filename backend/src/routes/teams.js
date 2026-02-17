@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const teamController = require('../controllers/teamController');
+const auth = require('../middleware/auth');
 
-// Get all teams
+// Get all teams (public)
 router.get('/', teamController.getAllTeams);
 
-// Get team by ID
+// Get team by ID (public)
 router.get('/:id', teamController.getTeamById);
+
+// Protected routes (require authentication)
+router.use(auth);
 
 // Create new team
 router.post('/', teamController.createTeam);

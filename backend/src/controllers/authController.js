@@ -1,45 +1,36 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { validationResult } = require('express-validator');
-
-// Mock database - replace with actual database
-const users = [];
+const User = require('../models/User');
 
 const authController = {
   // Register new user
   register: async (req, res) => {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
       const { email, password, username } = req.body;
 
       // Check if user already exists
-      const existingUser = users.find(user => user.email === email);
+      const existingUser = await User.findOne({
+        $or: [{ email }, { username }]
+      });
+
       if (existingUser) {
-        return res.status(400).json({ error: 'User already exists' });
+        return res.status(400).json({ 
+          error: existingUser.email === email ? 'Email already registered' : 'Username already taken'
+        });
       }
 
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
       // Create new user
-      const newUser = {
-        id: users.length + 1,
+      const newUser = new User({
         email,
         username,
-        password: hashedPassword,
-        createdAt: new Date()
-      };
+        password
+      });
 
-      users.push(newUser);
+      await newUser.save();
 
       // Generate JWT token
       const token = jwt.sign(
-        { userId: newUser.id, email: newUser.email },
+        { userId: newUser._id, email: newUser.email },
         process.env.JWT_SECRET || 'your-secret-key',
         { expiresIn: '24h' }
       );
@@ -48,41 +39,40 @@ const authController = {
         message: 'User registered successfully',
         token,
         user: {
-          id: newUser.id,
+          id: newUser._id,
           email: newUser.email,
-          username: newUser.username
+          username: newUser.username,
+          level: newUser.level,
+          rank: newUser.rank,
+          avatar: newUser.avatar
         }
       });
     } catch (error) {
-      res.status(500).json({ error: 'Server error' });
+      console.error('Registration error:', error);
+      res.status(500).json({ error: 'Server error during registration' });
     }
   },
 
   // Login user
   login: async (req, res) => {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
       const { email, password } = req.body;
 
-      // Find user
-      const user = users.find(u => u.email === email);
+      // Find user by email
+      const user = await User.findOne({ email });
       if (!user) {
         return res.status(400).json({ error: 'Invalid credentials' });
       }
 
       // Check password
-      const isMatch = await bcrypt.compare(password, user.password);
+      const isMatch = await user.comparePassword(password);
       if (!isMatch) {
         return res.status(400).json({ error: 'Invalid credentials' });
       }
 
       // Generate JWT token
       const token = jwt.sign(
-        { userId: user.id, email: user.email },
+        { userId: user._id, email: user.email },
         process.env.JWT_SECRET || 'your-secret-key',
         { expiresIn: '24h' }
       );
@@ -91,13 +81,18 @@ const authController = {
         message: 'Login successful',
         token,
         user: {
-          id: user.id,
+          id: user._id,
           email: user.email,
-          username: user.username
+          username: user.username,
+          level: user.level,
+          rank: user.rank,
+          avatar: user.avatar,
+          stats: user.stats
         }
       });
     } catch (error) {
-      res.status(500).json({ error: 'Server error' });
+      console.error('Login error:', error);
+      res.status(500).json({ error: 'Server error during login' });
     }
   },
 
