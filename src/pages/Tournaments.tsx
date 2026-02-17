@@ -1,12 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { MainLayout } from '@/components/MainLayout';
 import { TournamentCard } from '@/components/TournamentCard';
-import { tournaments } from '@/data/mock';
+import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Filter, X, Loader2 } from 'lucide-react';
-import { GameType, TournamentStatus } from '@/types';
 import { useDebounce } from '@/hooks/useDebounce';
+
+type GameType = 'BGMI' | 'FreeFire' | 'CODMobile';
+type TournamentStatus = 'registration' | 'live' | 'completed';
 
 const gameTypes: GameType[] = ['BGMI', 'FreeFire', 'CODMobile'];
 const statuses: TournamentStatus[] = ['registration', 'live', 'completed'];
@@ -21,19 +24,44 @@ const Tournaments = () => {
   const [selectedGame, setSelectedGame] = useState<GameType | ''>('');
   const [selectedStatus, setSelectedStatus] = useState<TournamentStatus | ''>('');
   const [showFilters, setShowFilters] = useState(false);
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const debouncedSearch = useDebounce(search, 300);
   const isSearching = search !== debouncedSearch;
 
+  useEffect(() => {
+    const fetchTournaments = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('*')
+        .order('start_date', { ascending: true });
+      if (data) setTournaments(data);
+      setLoading(false);
+    };
+    fetchTournaments();
+
+    // Subscribe to realtime
+    const channel = supabase
+      .channel('tournaments-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tournaments' }, () => {
+        fetchTournaments();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const filtered = useMemo(() => {
     return tournaments.filter((t) => {
       const q = debouncedSearch.toLowerCase();
-      const matchSearch = t.name.toLowerCase().includes(q) || t.gameType.toLowerCase().includes(q);
-      const matchGame = !selectedGame || t.gameType === selectedGame;
+      const matchSearch = t.name.toLowerCase().includes(q) || t.game_type.toLowerCase().includes(q);
+      const matchGame = !selectedGame || t.game_type === selectedGame;
       const matchStatus = !selectedStatus || t.status === selectedStatus;
       return matchSearch && matchGame && matchStatus;
     });
-  }, [debouncedSearch, selectedGame, selectedStatus]);
+  }, [debouncedSearch, selectedGame, selectedStatus, tournaments]);
 
   const clearFilters = () => {
     setSearch('');
@@ -42,6 +70,21 @@ const Tournaments = () => {
   };
 
   const hasFilters = search || selectedGame || selectedStatus;
+
+  // Map DB fields to component props
+  const mapTournament = (t: any) => ({
+    id: t.id,
+    name: t.name,
+    gameType: t.game_type,
+    prizePool: Number(t.prize_pool),
+    startDate: t.start_date,
+    endDate: t.end_date,
+    status: t.status,
+    registeredTeams: t.registered_teams,
+    maxTeams: t.max_teams,
+    entryFee: Number(t.entry_fee),
+    description: t.description || '',
+  });
 
   return (
     <MainLayout>
@@ -62,10 +105,7 @@ const Tournaments = () => {
               className="pl-10 pr-10"
             />
             {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             )}
@@ -87,13 +127,7 @@ const Tournaments = () => {
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Game</label>
                 <div className="flex flex-wrap gap-2">
                   {gameTypes.map((g) => (
-                    <Button
-                      key={g}
-                      size="sm"
-                      variant={selectedGame === g ? 'default' : 'outline'}
-                      onClick={() => setSelectedGame(selectedGame === g ? '' : g)}
-                      className={selectedGame === g ? 'gradient-primary border-0' : ''}
-                    >
+                    <Button key={g} size="sm" variant={selectedGame === g ? 'default' : 'outline'} onClick={() => setSelectedGame(selectedGame === g ? '' : g)} className={selectedGame === g ? 'gradient-primary border-0' : ''}>
                       {g}
                     </Button>
                   ))}
@@ -103,13 +137,7 @@ const Tournaments = () => {
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</label>
                 <div className="flex flex-wrap gap-2">
                   {statuses.map((s) => (
-                    <Button
-                      key={s}
-                      size="sm"
-                      variant={selectedStatus === s ? 'default' : 'outline'}
-                      onClick={() => setSelectedStatus(selectedStatus === s ? '' : s)}
-                      className={selectedStatus === s ? 'gradient-primary border-0' : ''}
-                    >
+                    <Button key={s} size="sm" variant={selectedStatus === s ? 'default' : 'outline'} onClick={() => setSelectedStatus(selectedStatus === s ? '' : s)} className={selectedStatus === s ? 'gradient-primary border-0' : ''}>
                       {statusLabels[s]}
                     </Button>
                   ))}
@@ -120,7 +148,13 @@ const Tournaments = () => {
         )}
 
         {/* Results */}
-        {isSearching ? (
+        {loading ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <Skeleton key={i} className="h-72 rounded-xl" />
+            ))}
+          </div>
+        ) : isSearching ? (
           <div className="flex flex-col items-center py-20 text-center">
             <Loader2 className="mb-4 h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">Searching...</p>
@@ -129,7 +163,7 @@ const Tournaments = () => {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((t, i) => (
               <div key={t.id} className="animate-fade-up" style={{ animationDelay: `${i * 0.05}s` }}>
-                <TournamentCard tournament={t} />
+                <TournamentCard tournament={mapTournament(t)} />
               </div>
             ))}
           </div>

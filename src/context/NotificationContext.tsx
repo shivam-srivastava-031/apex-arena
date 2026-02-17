@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
 export type NotificationType = 'tournament_update' | 'match_reminder' | 'team_invite';
 
@@ -24,84 +25,101 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const defaultNotifications: Notification[] = [
-  {
-    id: 'n1',
-    type: 'tournament_update',
-    title: 'Tournament Starting Soon',
-    message: 'BGMI Pro League Season 4 starts in 2 weeks!',
-    read: false,
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    link: '/tournaments/t1',
-  },
-  {
-    id: 'n2',
-    type: 'match_reminder',
-    title: 'Match Reminder',
-    message: 'Your match vs Titan Esports is tomorrow at 6 PM.',
-    read: false,
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    link: '/dashboard',
-  },
-  {
-    id: 'n3',
-    type: 'team_invite',
-    title: 'Team Invite',
-    message: 'You have been invited to join Nova Blitz!',
-    read: false,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    link: '/dashboard/teams',
-  },
-  {
-    id: 'n4',
-    type: 'tournament_update',
-    title: 'Registration Open',
-    message: 'COD Mobile Weekend Warriors is now open for registration.',
-    read: true,
-    createdAt: new Date(Date.now() - 172800000).toISOString(),
-    link: '/tournaments/t9',
-  },
-  {
-    id: 'n5',
-    type: 'match_reminder',
-    title: 'Match Result',
-    message: 'Shadow Wolves won against Cyber Ninjas 3-1!',
-    read: true,
-    createdAt: new Date(Date.now() - 259200000).toISOString(),
-    link: '/dashboard',
-  },
-];
-
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    const saved = localStorage.getItem('esports_notifications');
-    return saved ? JSON.parse(saved) : defaultNotifications;
-  });
+  const { user, isAuthenticated } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
+  // Fetch notifications from DB
   useEffect(() => {
-    localStorage.setItem('esports_notifications', JSON.stringify(notifications));
-  }, [notifications]);
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
+    const fetchNotifications = async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      if (data) {
+        setNotifications(data.map(n => ({
+          id: n.id,
+          type: n.type as NotificationType,
+          title: n.title,
+          message: n.message,
+          read: n.read,
+          createdAt: n.created_at,
+          link: n.link || undefined,
+        })));
+      }
+    };
+
+    fetchNotifications();
+
+    // Subscribe to realtime notifications
+    const channel = supabase
+      .channel('user-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const n = payload.new as any;
+          const newNotif: Notification = {
+            id: n.id,
+            type: n.type as NotificationType,
+            title: n.title,
+            message: n.message,
+            read: n.read,
+            createdAt: n.created_at,
+            link: n.link || undefined,
+          };
+          setNotifications(prev => [newNotif, ...prev].slice(0, 20));
+          toast.info(n.title, { description: n.message });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const markAsRead = useCallback((id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    await supabase.from('notifications').update({ read: true }).eq('id', id);
   }, []);
 
-  const markAllAsRead = useCallback(() => {
+  const markAllAsRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
+    if (user) {
+      await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false);
+    }
+  }, [user]);
 
-  const addNotification = useCallback((n: Omit<Notification, 'id' | 'read' | 'createdAt'>) => {
-    const newNotif: Notification = {
-      ...n,
-      id: `n_${Date.now()}`,
-      read: false,
-      createdAt: new Date().toISOString(),
-    };
-    setNotifications((prev) => [newNotif, ...prev].slice(0, 20));
-    toast.info(n.title, { description: n.message });
-  }, []);
+  const addNotification = useCallback(async (n: Omit<Notification, 'id' | 'read' | 'createdAt'>) => {
+    if (!user) return;
+    const { data } = await supabase.from('notifications').insert({
+      user_id: user.id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      link: n.link,
+    }).select().maybeSingle();
+    
+    if (data) {
+      toast.info(n.title, { description: n.message });
+    }
+  }, [user]);
 
   return (
     <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, addNotification }}>

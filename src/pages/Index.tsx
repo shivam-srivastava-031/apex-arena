@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { MainLayout } from '@/components/MainLayout';
 import { TournamentCard } from '@/components/TournamentCard';
 import { FloatingIcons } from '@/components/FloatingIcons';
 import { useCountUp } from '@/hooks/useCountUp';
-import { tournaments } from '@/data/mock';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UserPlus, Users, ClipboardList, Trophy, Zap, Shield } from 'lucide-react';
-
-const featuredTournaments = tournaments.filter((t) => t.status !== 'completed').slice(0, 3);
 
 const steps = [
   { icon: UserPlus, title: 'Create Account', desc: 'Sign up in seconds and set up your gamer profile.' },
@@ -20,15 +20,44 @@ function CountUpStat({ target, suffix, label }: { target: number; suffix: string
   const { count, ref } = useCountUp(target);
   return (
     <div ref={ref}>
-      <div className="font-display text-3xl font-black text-primary-foreground">
-        {count.toLocaleString()}{suffix}
-      </div>
+      <div className="font-display text-3xl font-black text-primary-foreground">{count.toLocaleString()}{suffix}</div>
       <div className="text-sm text-primary-foreground/60">{label}</div>
     </div>
   );
 }
 
 const Index = () => {
+  const [featured, setFeatured] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const { data } = await supabase
+        .from('tournaments')
+        .select('*')
+        .neq('status', 'completed')
+        .order('start_date', { ascending: true })
+        .limit(3);
+      setFeatured(data || []);
+      setLoading(false);
+    };
+    fetch();
+  }, []);
+
+  const mapTournament = (t: any) => ({
+    id: t.id,
+    name: t.name,
+    gameType: t.game_type,
+    prizePool: Number(t.prize_pool),
+    startDate: t.start_date,
+    endDate: t.end_date,
+    status: t.status,
+    registeredTeams: t.registered_teams,
+    maxTeams: t.max_teams,
+    entryFee: Number(t.entry_fee),
+    description: t.description || '',
+  });
+
   return (
     <MainLayout>
       {/* Hero */}
@@ -43,8 +72,7 @@ const Index = () => {
             <Zap className="h-4 w-4" /> Season 4 Now Live
           </div>
           <h1 className="animate-fade-up font-display text-4xl font-black leading-tight tracking-wider text-primary-foreground md:text-6xl lg:text-7xl">
-            COMPETE, WIN,<br />
-            <span className="text-gradient">DOMINATE</span>
+            COMPETE, WIN,<br /><span className="text-gradient">DOMINATE</span>
           </h1>
           <p className="animate-fade-up-delay-1 mx-auto mt-6 max-w-xl text-lg text-primary-foreground/70">
             India's Premier Esports Tournament Platform. Join thousands of gamers competing for glory and massive prize pools.
@@ -57,8 +85,6 @@ const Index = () => {
               <Link to="/register">Sign Up</Link>
             </Button>
           </div>
-
-          {/* Stats with count-up */}
           <div className="animate-fade-up-delay-3 mt-16 grid grid-cols-2 gap-6 md:grid-cols-4 md:gap-12">
             <CountUpStat target={10} suffix="K+" label="Players" />
             <CountUpStat target={500} suffix="+" label="Tournaments" />
@@ -79,13 +105,21 @@ const Index = () => {
             <Link to="/tournaments">View All →</Link>
           </Button>
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {featuredTournaments.map((t, i) => (
-            <div key={t.id} className="animate-fade-up" style={{ animationDelay: `${i * 0.1}s` }}>
-              <TournamentCard tournament={t} />
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-72 rounded-xl" />)}
+          </div>
+        ) : featured.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {featured.map((t, i) => (
+              <div key={t.id} className="animate-fade-up" style={{ animationDelay: `${i * 0.1}s` }}>
+                <TournamentCard tournament={mapTournament(t)} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-muted-foreground">No upcoming tournaments. Check back soon!</p>
+        )}
         <div className="mt-6 text-center md:hidden">
           <Button asChild variant="outline">
             <Link to="/tournaments">View All Tournaments</Link>
@@ -106,9 +140,7 @@ const Index = () => {
                 <div className="gradient-primary mb-4 flex h-14 w-14 items-center justify-center rounded-xl shadow-glow">
                   <step.icon className="h-7 w-7 text-primary-foreground" />
                 </div>
-                <span className="mb-1 font-display text-xs font-bold tracking-wider text-muted-foreground">
-                  STEP {i + 1}
-                </span>
+                <span className="mb-1 font-display text-xs font-bold tracking-wider text-muted-foreground">STEP {i + 1}</span>
                 <h3 className="mb-2 font-display text-base font-bold">{step.title}</h3>
                 <p className="text-sm text-muted-foreground">{step.desc}</p>
               </div>
@@ -122,9 +154,7 @@ const Index = () => {
         <div className="gradient-hero overflow-hidden rounded-2xl p-8 text-center md:p-16">
           <div className="relative">
             <Shield className="mx-auto mb-6 h-12 w-12 text-primary" />
-            <h2 className="font-display text-2xl font-bold tracking-wider text-primary-foreground md:text-4xl">
-              READY TO COMPETE?
-            </h2>
+            <h2 className="font-display text-2xl font-bold tracking-wider text-primary-foreground md:text-4xl">READY TO COMPETE?</h2>
             <p className="mx-auto mt-4 max-w-md text-primary-foreground/70">
               Join the fastest growing esports community in India. Create your team and start winning today.
             </p>

@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,15 +9,25 @@ import { Camera, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [dob, setDob] = useState('');
   const [bgmiId, setBgmiId] = useState('');
   const [ffId, setFfId] = useState('');
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '');
+      setPhone(profile.phone || '');
+      setDob(profile.date_of_birth || '');
+      setBgmiId(profile.bgmi_id || '');
+      setFfId(profile.ff_id || '');
+    }
+  }, [profile]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,10 +39,26 @@ const Profile = () => {
   };
 
   const handleSave = async () => {
+    if (!user) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: fullName,
+        phone,
+        date_of_birth: dob || null,
+        bgmi_id: bgmiId,
+        ff_id: ffId,
+      })
+      .eq('id', user.id);
+    
     setLoading(false);
-    toast.success('Profile updated successfully!');
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Profile updated successfully!');
+      refreshProfile();
+    }
   };
 
   return (
@@ -39,7 +66,6 @@ const Profile = () => {
       <h1 className="mb-6 font-display text-2xl font-bold tracking-wider">PROFILE</h1>
 
       <div className="gaming-card p-6">
-        {/* Avatar upload */}
         <div className="mb-8 flex items-center gap-6">
           <div className="relative">
             <Avatar className="h-20 w-20">
@@ -47,7 +73,7 @@ const Profile = () => {
                 <AvatarImage src={avatarPreview} alt="Avatar" />
               ) : (
                 <AvatarFallback className="gradient-primary text-2xl text-primary-foreground">
-                  {user?.username?.slice(0, 2).toUpperCase()}
+                  {(profile?.username || user?.email || '?').slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               )}
             </Avatar>
@@ -57,16 +83,10 @@ const Profile = () => {
             >
               <Camera className="h-3.5 w-3.5" />
             </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleAvatarChange}
-            />
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
           </div>
           <div>
-            <h2 className="font-display text-lg font-bold">{user?.username}</h2>
+            <h2 className="font-display text-lg font-bold">{profile?.username || 'User'}</h2>
             <p className="text-sm text-muted-foreground">{user?.email}</p>
           </div>
         </div>
@@ -79,7 +99,7 @@ const Profile = () => {
             </div>
             <div>
               <Label>Email</Label>
-              <Input value={user?.email} readOnly className="mt-1.5 bg-muted/50" />
+              <Input value={user?.email || ''} readOnly className="mt-1.5 bg-muted/50" />
             </div>
           </div>
 
@@ -108,19 +128,8 @@ const Profile = () => {
             </div>
           </div>
 
-          <Button
-            className="gradient-primary border-0 font-semibold"
-            onClick={handleSave}
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save Changes'
-            )}
+          <Button className="gradient-primary border-0 font-semibold" onClick={handleSave} disabled={loading}>
+            {loading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</>) : 'Save Changes'}
           </Button>
         </div>
       </div>

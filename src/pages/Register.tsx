@@ -40,10 +40,10 @@ const Register = () => {
     setLoading(true);
     try {
       await register(email, username, password);
-      toast.success('Account created successfully!');
-      navigate('/dashboard');
-    } catch {
-      toast.error('Registration failed');
+      toast.success('Account created! Please check your email to verify your account.');
+      navigate('/login');
+    } catch (err: any) {
+      toast.error(err?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

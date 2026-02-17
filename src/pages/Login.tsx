@@ -36,8 +36,8 @@ const Login = () => {
       await login(email, password);
       toast.success('Welcome back!');
       navigate('/dashboard');
-    } catch {
-      toast.error('Login failed');
+    } catch (err: any) {
+      toast.error(err?.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,6 @@ const Login = () => {
                 <Checkbox id="remember" checked={remember} onCheckedChange={(v) => setRemember(v as boolean)} />
                 <Label htmlFor="remember" className="text-sm">Remember me</Label>
               </div>
-              <button type="button" className="text-sm text-primary hover:underline">Forgot password?</button>
             </div>
 
             <Button type="submit" disabled={loading} className="gradient-primary w-full border-0 font-semibold">
