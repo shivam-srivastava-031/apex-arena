@@ -12,3 +12,12 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# Sitemap
+Sitemap: https://apex-arena.com/sitemap.xml
+
+# Block API and admin paths
+Disallow: /api/
+Disallow: /admin/
+Disallow: /_next/
+Disallow: /src/
