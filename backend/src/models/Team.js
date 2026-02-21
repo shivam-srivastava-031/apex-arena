@@ -1,99 +1,61 @@
 const mongoose = require('mongoose');
 
-const teamSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 50
-  },
-  tag: {
-    type: String,
-    required: true,
-    uppercase: true,
-    maxlength: 10
-  },
-  description: {
-    type: String,
-    maxlength: 500
-  },
-  logo: {
-    type: String,
-    default: ''
-  },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  members: [{
-    user: {
+const teamMemberSchema = new mongoose.Schema(
+  {
+    userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: 'User',
+      default: null
     },
-    role: {
+    name: {
       type: String,
-      enum: ['Leader', 'Co-Leader', 'Member', 'Substitute'],
-      default: 'Member'
+      required: true,
+      trim: true,
+      maxlength: 60
     },
-    joinedAt: {
-      type: Date,
-      default: Date.now
+    bgmiId: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 60
     }
-  }],
-  maxMembers: {
-    type: Number,
-    default: 4
   },
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-  stats: {
-    tournamentsWon: { type: Number, default: 0 },
-    tournamentsPlayed: { type: Number, default: 0 },
-    totalWinnings: { type: Number, default: 0 }
-  }
-}, {
-  timestamps: true
-});
+  { _id: false }
+);
 
-// Ensure team leader is in members
-teamSchema.pre('save', function(next) {
-  if (this.isNew && this.createdBy) {
-    const existingLeader = this.members.find(member => 
-      member.user.toString() === this.createdBy.toString()
-    );
-    
-    if (!existingLeader) {
-      this.members.push({
-        user: this.createdBy,
-        role: 'Leader',
-        joinedAt: new Date()
-      });
+const teamSchema = new mongoose.Schema(
+  {
+    tournamentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Tournament',
+      required: true
+    },
+    leaderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    members: {
+      type: [teamMemberSchema],
+      required: true,
+      default: []
+    },
+    mode: {
+      type: String,
+      enum: ['SOLO', 'DUO', 'SQUAD', 'CUSTOM'],
+      required: true
+    },
+    locked: {
+      type: Boolean,
+      default: false
     }
+  },
+  {
+    timestamps: true,
+    versionKey: false
   }
-  next();
-});
+);
 
-// Get member count
-teamSchema.virtual('memberCount').get(function() {
-  return this.members.length;
-});
-
-// Check if user is member
-teamSchema.methods.isMember = function(userId) {
-  return this.members.some(member => 
-    member.user.toString() === userId.toString()
-  );
-};
-
-// Get user role in team
-teamSchema.methods.getUserRole = function(userId) {
-  const member = this.members.find(member => 
-    member.user.toString() === userId.toString()
-  );
-  return member ? member.role : null;
-};
+teamSchema.index({ tournamentId: 1, leaderId: 1 });
 
 module.exports = mongoose.model('Team', teamSchema);
