@@ -1,0 +1,323 @@
+openapi: 3.0.3
+info:
+  title: Esports Tournament Booking Platform API
+  version: 1.0.0
+  description: |
+    REST API for tournament publishing, slot booking, payment confirmation, admin operations, and room access.
+servers:
+  - url: http://localhost:5000/api
+    description: Local
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+    ApiError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+    RegisterRequest:
+      type: object
+      required: [name, phone, bgmiId, password]
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        bgmiId: { type: string }
+        password: { type: string }
+    LoginRequest:
+      type: object
+      required: [phone, password]
+      properties:
+        phone: { type: string }
+        password: { type: string }
+    TournamentCreateRequest:
+      type: object
+      required: [title, gameName, mode, teamSize, entryFee, prizePool, totalSlots, startDateTime, registrationDeadline]
+      properties:
+        title: { type: string }
+        gameName: { type: string }
+        mode:
+          type: string
+          enum: [SOLO, DUO, SQUAD, CUSTOM]
+        teamSize:
+          type: integer
+          minimum: 1
+        entryFee: { type: number }
+        prizePool: { type: number }
+        totalSlots: { type: integer }
+        startDateTime: { type: string, format: date-time }
+        registrationDeadline: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, LIVE, COMPLETED, CANCELLED]
+    BookSlotRequest:
+      type: object
+      required: [tournamentId, selectedTeamSize, players]
+      properties:
+        tournamentId: { type: string }
+        selectedTeamSize: { type: integer }
+        players:
+          type: array
+          items:
+            type: object
+            required: [name, bgmiId]
+            properties:
+              name: { type: string }
+              bgmiId: { type: string }
+        metadata:
+          type: object
+    ConfirmPaymentRequest:
+      type: object
+      required: [paymentId, paymentStatus]
+      properties:
+        paymentId: { type: string }
+        paymentStatus:
+          type: string
+          enum: [SUCCESS, FAILED]
+        providerTransactionId: { type: string }
+        metadata: { type: object }
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Healthy API
+  /auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Register user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201': { description: Registered }
+        '409': { description: Duplicate }
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200': { description: Logged in }
+        '401': { description: Unauthorized }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user profile
+      responses:
+        '200': { description: Profile }
+        '401': { description: Unauthorized }
+  /tournaments:
+    get:
+      tags: [Tournaments]
+      summary: List tournaments
+      security: []
+      responses:
+        '200': { description: List }
+    post:
+      tags: [Admin Tournaments]
+      summary: Create tournament
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TournamentCreateRequest'
+      responses:
+        '201': { description: Created }
+        '403': { description: Admin only }
+  /tournaments/published/list:
+    get:
+      tags: [Tournaments]
+      summary: List published tournaments
+      security: []
+      responses:
+        '200': { description: Published list }
+  /tournaments/{id}:
+    get:
+      tags: [Tournaments]
+      summary: Tournament details
+      security: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Details }
+    patch:
+      tags: [Admin Tournaments]
+      summary: Edit tournament
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Admin Tournaments]
+      summary: Delete tournament
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Deleted }
+  /tournaments/{id}/status:
+    patch:
+      tags: [Admin Tournaments]
+      summary: Change tournament status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [DRAFT, PUBLISHED, LIVE, COMPLETED, CANCELLED]
+      responses:
+        '200': { description: Status updated }
+  /tournaments/{id}/room:
+    patch:
+      tags: [Admin Tournaments]
+      summary: Set room credentials
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Room updated }
+  /tournaments/{id}/room-access:
+    get:
+      tags: [Registrations]
+      summary: Access room if registered and LIVE
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Room details }
+        '403': { description: Not eligible }
+  /tournaments/{id}/entries:
+    get:
+      tags: [Admin Entries]
+      summary: View entries of a tournament
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Entries list }
+  /registrations/book-slot:
+    post:
+      tags: [Booking]
+      summary: Book slot and create payment intent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookSlotRequest'
+      responses:
+        '201': { description: Booking initiated }
+        '409': { description: Duplicate/full }
+  /registrations/confirm-payment:
+    post:
+      tags: [Booking]
+      summary: Confirm payment and register using DB transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmPaymentRequest'
+      responses:
+        '200': { description: Registered }
+        '409': { description: Overbooking prevented }
+  /registrations/my:
+    get:
+      tags: [Booking]
+      summary: My registered tournaments
+      responses:
+        '200': { description: My registrations }
+  /registrations:
+    get:
+      tags: [Admin Entries]
+      summary: List registrations (admin)
+      responses:
+        '200': { description: Registrations list }
+  /users:
+    get:
+      tags: [Admin Users]
+      summary: List users
+      responses:
+        '200': { description: Users list }
+  /users/{id}/ban:
+    patch:
+      tags: [Admin Users]
+      summary: Ban or unban user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isBanned]
+              properties:
+                isBanned: { type: boolean }
+      responses:
+        '200': { description: Updated }

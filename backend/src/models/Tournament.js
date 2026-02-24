@@ -1,128 +1,83 @@
 const mongoose = require('mongoose');
 
-const tournamentSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 100
-  },
-  description: {
-    type: String,
-    maxlength: 1000
-  },
-  game: {
-    type: String,
-    required: true,
-    enum: ['Apex Legends', 'BGMI', 'PUBG', 'Call of Duty', 'Valorant', 'CS:GO']
-  },
-  format: {
-    type: String,
-    enum: ['Solo', 'Duo', 'Squad', 'Custom'],
-    default: 'Squad'
-  },
-  maxTeams: {
-    type: Number,
-    required: true,
-    min: 2,
-    max: 256
-  },
-  entryFee: {
-    type: Number,
-    default: 0
-  },
-  prizePool: {
-    type: Number,
-    required: true
-  },
-  currency: {
-    type: String,
-    enum: ['USD', 'INR', 'EUR'],
-    default: 'USD'
-  },
-  startDate: {
-    type: Date,
-    required: true
-  },
-  endDate: {
-    type: Date,
-    required: true
-  },
-  registrationStart: {
-    type: Date,
-    default: Date.now
-  },
-  registrationEnd: {
-    type: Date,
-    required: true
-  },
-  status: {
-    type: String,
-    enum: ['Upcoming', 'Registration', 'Ongoing', 'Completed', 'Cancelled'],
-    default: 'Upcoming'
-  },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  participants: [{
-    team: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Team'
+const tournamentSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 120
     },
-    registeredAt: {
-      type: Date,
-      default: Date.now
+    gameName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 80
+    },
+    mode: {
+      type: String,
+      enum: ['SOLO', 'DUO', 'SQUAD', 'CUSTOM'],
+      required: true
+    },
+    teamSize: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 10
+    },
+    entryFee: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    totalSlots: {
+      type: Number,
+      required: true,
+      min: 1
+    },
+    filledSlots: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    prizePool: {
+      type: Number,
+      required: true,
+      min: 0
     },
     status: {
       type: String,
-      enum: ['Registered', 'Confirmed', 'Eliminated', 'Winner'],
-      default: 'Registered'
-    }
-  }],
-  prizeDistribution: [{
-    position: {
-      type: String,
+      enum: ['DRAFT', 'PUBLISHED', 'LIVE', 'COMPLETED', 'CANCELLED'],
+      default: 'DRAFT'
+    },
+    startDateTime: {
+      type: Date,
       required: true
     },
-    prize: {
-      type: Number,
+    registrationDeadline: {
+      type: Date,
+      required: true
+    },
+    roomId: {
+      type: String,
+      default: null
+    },
+    roomPassword: {
+      type: String,
+      default: null
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
       required: true
     }
-  }],
-  rules: [{
-    type: String,
-    maxlength: 500
-  }],
-  banner: {
-    type: String,
-    default: ''
   },
-  isActive: {
-    type: Boolean,
-    default: true
+  {
+    timestamps: true,
+    versionKey: false
   }
-}, {
-  timestamps: true
-});
+);
 
-// Get participant count
-tournamentSchema.virtual('participantCount').get(function() {
-  return this.participants.length;
-});
-
-// Check if registration is open
-tournamentSchema.virtual('isRegistrationOpen').get(function() {
-  const now = new Date();
-  return this.status === 'Registration' && 
-         now >= this.registrationStart && 
-         now <= this.registrationEnd;
-});
-
-// Check if tournament is full
-tournamentSchema.virtual('isFull').get(function() {
-  return this.participants.length >= this.maxTeams;
-});
+tournamentSchema.index({ status: 1, registrationDeadline: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Tournament', tournamentSchema);
