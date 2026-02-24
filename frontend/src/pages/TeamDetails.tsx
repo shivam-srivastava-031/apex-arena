@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
+import { fetchTeamById, addTeamMember, removeTeamMember } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, UserPlus, Trophy, Target, DollarSign, Crown, X } from 'lucide-react';
+import { ArrowLeft, UserPlus, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -18,20 +19,20 @@ const TeamDetailsPage = () => {
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteUsername, setInviteUsername] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteBgmiId, setInviteBgmiId] = useState('');
 
   const fetchTeam = async () => {
-    const { data } = await supabase.from('teams').select('*').eq('id', id).maybeSingle();
-    setTeam(data);
-
-    if (data) {
-      const { data: memberData } = await supabase
-        .from('team_members')
-        .select('*, profiles(id, username, avatar_url)')
-        .eq('team_id', data.id);
-      setMembers(memberData || []);
+    try {
+      const teamData = await fetchTeamById(id as string);
+      setTeam(teamData);
+      setMembers(teamData.members || []);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to load team details');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -61,48 +62,34 @@ const TeamDetailsPage = () => {
     );
   }
 
-  const isCaptain = team.captain_id === user?.id;
+  const isCaptain = team.leaderId._id === user?.id || team.leaderId === user?.id;
 
   const handleInvite = async () => {
-    if (!inviteUsername.trim()) return;
-    // Look up user by username
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', inviteUsername)
-      .maybeSingle();
-    
-    if (!profileData) {
-      toast.error('User not found');
+    if (!inviteName.trim() || !inviteBgmiId.trim()) {
+      toast.error('Name and BGMI ID are required');
       return;
     }
 
-    const { error } = await supabase.from('team_members').insert({
-      team_id: team.id,
-      user_id: profileData.id,
-      role: 'member',
-    });
-
-    if (error) {
-      if (error.code === '23505') toast.error('User is already a member');
-      else toast.error(error.message);
-      return;
+    try {
+      await addTeamMember(team._id, { name: inviteName, bgmiId: inviteBgmiId });
+      toast.success(`${inviteName} added to team!`);
+      setInviteOpen(false);
+      setInviteName('');
+      setInviteBgmiId('');
+      fetchTeam();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add member');
     }
-
-    toast.success(`${inviteUsername} added to team!`);
-    setInviteOpen(false);
-    setInviteUsername('');
-    fetchTeam();
   };
 
-  const handleRemove = async (memberId: string, username: string) => {
-    const { error } = await supabase.from('team_members').delete().eq('id', memberId);
-    if (error) {
-      toast.error('Failed to remove member');
-      return;
+  const handleRemove = async (memberId: string, name: string) => {
+    try {
+      await removeTeamMember(team._id, memberId);
+      toast.success(`${name} removed from team.`);
+      fetchTeam();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to remove member');
     }
-    toast.success(`${username} removed from team.`);
-    fetchTeam();
   };
 
   return (
@@ -120,7 +107,7 @@ const TeamDetailsPage = () => {
             <h1 className="font-display text-2xl font-bold tracking-wider">{team.name}</h1>
             <span className="text-sm text-muted-foreground">[{team.tag}]</span>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">Created {new Date(team.created_at).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Created {new Date(team.createdAt).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
         </div>
         {isCaptain && (
           <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
@@ -133,8 +120,12 @@ const TeamDetailsPage = () => {
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div>
-                  <Label>Username</Label>
-                  <Input placeholder="Search username..." value={inviteUsername} onChange={(e) => setInviteUsername(e.target.value)} className="mt-1.5" />
+                  <Label>Player Name</Label>
+                  <Input placeholder="Enter name..." value={inviteName} onChange={(e) => setInviteName(e.target.value)} className="mt-1.5" />
+                </div>
+                <div>
+                  <Label>Player BGMI ID</Label>
+                  <Input placeholder="Enter BGMI ID..." value={inviteBgmiId} onChange={(e) => setInviteBgmiId(e.target.value)} className="mt-1.5" />
                 </div>
                 <Button className="gradient-primary w-full border-0" onClick={handleInvite}>Add to Team</Button>
               </div>
@@ -161,29 +152,28 @@ const TeamDetailsPage = () => {
                   <div>
                     <p className="text-sm font-medium">Captain</p>
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Crown className="h-3 w-3 text-warning" /> Captain
+                      Captain
                     </p>
                   </div>
                 </div>
               </div>
               {members.map((m) => (
-                <div key={m.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                <div key={m._id} className="flex items-center justify-between rounded-lg border border-border p-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="bg-muted text-xs">
-                        {(m.profiles?.username || 'U').slice(0, 2).toUpperCase()}
+                        {(m.name || 'U').slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-sm font-medium">{m.profiles?.username || 'Unknown'}</p>
+                      <p className="text-sm font-medium">{m.name}</p>
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        {m.role === 'captain' && <Crown className="h-3 w-3 text-warning" />}
-                        {m.role === 'captain' ? 'Captain' : 'Member'}
+                        Member
                       </p>
                     </div>
                   </div>
-                  {isCaptain && m.role !== 'captain' && (
-                    <Button variant="ghost" size="icon" onClick={() => handleRemove(m.id, m.profiles?.username)} className="text-muted-foreground hover:text-destructive">
+                  {isCaptain && (
+                    <Button variant="ghost" size="icon" onClick={() => handleRemove(m._id, m.name)} className="text-muted-foreground hover:text-destructive">
                       <X className="h-4 w-4" />
                     </Button>
                   )}

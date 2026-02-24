@@ -28,56 +28,46 @@ const TournamentDetails = () => {
   const [myRegistration, setMyRegistration] = useState<any>(null);
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchTournament = async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from('tournaments')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-      setTournament(data);
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/tournaments/${id}`);
+        const json = await res.json();
 
-      // Fetch registered teams
-      if (data) {
-        const { data: regs } = await supabase
-          .from('registrations')
-          .select('*, teams(id, name, tag)')
-          .eq('tournament_id', data.id)
-          .eq('status', 'registered');
-        setRegisteredTeams(regs || []);
+        if (json.success && json.data) {
+          setTournament(json.data);
 
-        // Check if user's team is registered
-        if (user) {
-          const { data: myReg } = await supabase
-            .from('registrations')
-            .select('*, teams(id, name, tag)')
-            .eq('tournament_id', data.id)
-            .eq('registered_by', user.id)
-            .eq('status', 'registered')
-            .maybeSingle();
-          setMyRegistration(myReg);
-          setIsRegistered(!!myReg);
+          // Fetch registrations for this tournament
+          const regRes = await fetch(`${import.meta.env.VITE_API_URL}/tournaments/${id}/entries`);
+          const regJson = await regRes.json();
+          if (regJson.success) {
+            setRegisteredTeams(regJson.data || []);
+
+            // Check if user is registered by seeing if their team is in the registrations list
+            if (user) {
+              const myReg = regJson.data.find((r: any) =>
+                r.teamId?.members?.some((m: any) => m.userId === user.id) || r.userId?._id === user.id
+              );
+              if (myReg) {
+                setMyRegistration(myReg);
+                setIsRegistered(true);
+              }
+            }
+          }
         }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-    fetch();
+    fetchTournament();
   }, [id, user]);
 
   const handleCancelRegistration = async () => {
-    if (!myRegistration) return;
-    const { error } = await supabase
-      .from('registrations')
-      .update({ status: 'cancelled' })
-      .eq('id', myRegistration.id);
-    if (error) {
-      toast.error('Failed to cancel registration');
-    } else {
-      toast.success('Registration cancelled');
-      setIsRegistered(false);
-      setMyRegistration(null);
-      setRegisteredTeams(prev => prev.filter(r => r.id !== myRegistration.id));
-    }
+    // Note: Our Express API doesn't currently support user cancellation endpoint 
+    // from what the swagger implies, but assuming a generic failure warning for now
+    toast.error('Cancellations are not supported through the portal yet. Contact Admin.');
   };
 
   if (loading) {
@@ -128,11 +118,11 @@ const TournamentDetails = () => {
         {/* Key info cards */}
         <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-5">
           {[
-            { icon: Trophy, label: 'Prize Pool', value: `₹${Number(tournament.prize_pool).toLocaleString('en-IN')}` },
-            { icon: Calendar, label: 'Start Date', value: new Date(tournament.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) },
-            { icon: Calendar, label: 'End Date', value: new Date(tournament.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) },
-            { icon: DollarSign, label: 'Entry Fee', value: Number(tournament.entry_fee) === 0 ? 'FREE' : `₹${tournament.entry_fee}` },
-            { icon: Users, label: 'Teams', value: `${tournament.registered_teams}/${tournament.max_teams}` },
+            { icon: Trophy, label: 'Prize Pool', value: `₹${Number(tournament.prizePool).toLocaleString('en-IN')}` },
+            { icon: Calendar, label: 'Start Date', value: new Date(tournament.startDateTime).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) },
+            { icon: Calendar, label: 'Deadline', value: new Date(tournament.registrationDeadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) },
+            { icon: DollarSign, label: 'Entry Fee', value: Number(tournament.entryFee) === 0 ? 'FREE' : `₹${tournament.entryFee}` },
+            { icon: Users, label: 'Teams', value: `${tournament.filledSlots}/${tournament.totalSlots}` },
           ].map((item) => (
             <div key={item.label} className="gaming-card flex flex-col items-center p-4 text-center">
               <item.icon className="mb-2 h-5 w-5 text-primary" />
@@ -143,7 +133,7 @@ const TournamentDetails = () => {
         </div>
 
         {/* Register / Registered / Cancel */}
-        {tournament.status === 'registration' && isAuthenticated && (
+        {tournament.status === 'PUBLISHED' && isAuthenticated && (
           <div className="mb-8 flex flex-wrap gap-3">
             {isRegistered ? (
               <>
@@ -165,16 +155,16 @@ const TournamentDetails = () => {
         {isAuthenticated && (
           <RegistrationModal
             tournament={{
-              id: tournament.id,
-              name: tournament.name,
-              gameType: tournament.game_type,
-              prizePool: Number(tournament.prize_pool),
-              startDate: tournament.start_date,
-              endDate: tournament.end_date,
+              id: tournament._id,
+              name: tournament.title,
+              gameType: tournament.gameName,
+              prizePool: Number(tournament.prizePool),
+              startDate: tournament.startDateTime,
+              endDate: tournament.startDateTime,
               status: tournament.status,
-              registeredTeams: tournament.registered_teams,
-              maxTeams: tournament.max_teams,
-              entryFee: Number(tournament.entry_fee),
+              registeredTeams: tournament.filledSlots,
+              maxTeams: tournament.totalSlots,
+              entryFee: Number(tournament.entryFee),
               description: tournament.description || '',
             }}
             open={regOpen}
@@ -182,9 +172,11 @@ const TournamentDetails = () => {
             onRegistered={() => {
               setIsRegistered(true);
               // Refresh registered teams
-              supabase.from('registrations').select('*, teams(id, name, tag)').eq('tournament_id', tournament.id).eq('status', 'registered').then(({ data }) => {
-                setRegisteredTeams(data || []);
-              });
+              fetch(`${import.meta.env.VITE_API_URL}/tournaments/${id}/entries`)
+                .then(res => res.json())
+                .then(json => {
+                  if (json.success) setRegisteredTeams(json.data || []);
+                });
             }}
           />
         )}

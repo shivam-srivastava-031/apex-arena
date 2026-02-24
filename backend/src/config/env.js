@@ -11,7 +11,9 @@ const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   clientUrl: process.env.CLIENT_URL || process.env.FRONTEND_URL || '*',
   rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 900000),
-  rateLimitMax: Number(process.env.RATE_LIMIT_MAX || 200)
+  rateLimitMax: Number(process.env.RATE_LIMIT_MAX || 200),
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder'
 };
 
 module.exports = env;

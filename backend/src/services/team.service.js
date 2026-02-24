@@ -18,22 +18,6 @@ const validateMembersByMode = (mode, members) => {
 };
 
 const createTeam = async (leader, payload) => {
-  const tournament = await Tournament.findById(payload.tournamentId);
-  if (!tournament) {
-    throw new AppError('Tournament not found', 404);
-  }
-
-  if (tournament.mode !== payload.mode) {
-    throw new AppError('Team mode must match tournament mode', 400);
-  }
-
-  validateMembersByMode(payload.mode, payload.members);
-
-  const expectedTeamSize = payload.members.length + 1;
-  if (expectedTeamSize !== tournament.teamSize) {
-    throw new AppError(`Tournament allows teamSize ${tournament.teamSize} only`, 400);
-  }
-
   const normalizedMembers = [
     {
       userId: leader.id,
@@ -53,9 +37,10 @@ const createTeam = async (leader, payload) => {
   }
 
   const team = await Team.create({
-    tournamentId: payload.tournamentId,
+    name: payload.name,
+    tag: payload.tag.toUpperCase(),
+    description: payload.description || '',
     leaderId: leader.id,
-    mode: payload.mode,
     members: normalizedMembers,
     locked: false
   });
@@ -65,13 +50,51 @@ const createTeam = async (leader, payload) => {
 
 const listTeams = async (filters = {}) => {
   const query = {};
-  if (filters.tournamentId) {
-    query.tournamentId = filters.tournamentId;
+  if (filters.leaderId) {
+    query.leaderId = filters.leaderId;
   }
   return Team.find(query).sort({ createdAt: -1 });
 };
 
+const getTeamById = async (id) => {
+  return Team.findById(id).populate('leaderId', 'username id');
+};
+
+const addMember = async (teamId, leaderId, memberData) => {
+  const team = await Team.findOne({ _id: teamId, leaderId });
+  if (!team) throw new AppError('Team not found or you are not the leader', 404);
+  if (team.locked) throw new AppError('Team is locked and cannot be modified', 403);
+
+  if (team.members.some(m => m.bgmiId.toLowerCase() === memberData.bgmiId.toLowerCase())) {
+    throw new AppError('A member with this BGMI ID already exists in the team', 400);
+  }
+
+  // Assign user Id placeholder if it's the leader's own bgmi id (not standard but possible), otherwise null
+  const newMember = {
+    userId: null,
+    name: memberData.name,
+    bgmiId: memberData.bgmiId
+  };
+
+  team.members.push(newMember);
+  await team.save();
+  return team;
+};
+
+const removeMember = async (teamId, leaderId, memberId) => {
+  const team = await Team.findOne({ _id: teamId, leaderId });
+  if (!team) throw new AppError('Team not found or you are not the leader', 404);
+  if (team.locked) throw new AppError('Team is locked and cannot be modified', 403);
+
+  team.members = team.members.filter(m => m._id.toString() !== memberId.toString());
+  await team.save();
+  return team;
+};
+
 module.exports = {
   createTeam,
-  listTeams
+  listTeams,
+  getTeamById,
+  addMember,
+  removeMember
 };

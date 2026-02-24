@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { fetchAllTournaments, createTournament, deleteTournament } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,14 +35,19 @@ const AdminTournaments = () => {
   const [maxTeams, setMaxTeams] = useState('');
   const [entryFee, setEntryFee] = useState('');
 
-  const fetchTournaments = async () => {
-    const { data } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false });
-    setTournaments(data || []);
-    setLoading(false);
+  const fetchTournamentsList = async () => {
+    try {
+      const data = await fetchAllTournaments();
+      setTournaments(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchTournaments();
+    fetchTournamentsList();
   }, []);
 
   const handleCreate = async () => {
@@ -50,38 +56,40 @@ const AdminTournaments = () => {
       return;
     }
     setCreating(true);
-    const { error } = await supabase.from('tournaments').insert({
-      name,
-      game_type: gameType,
-      description,
-      start_date: new Date(startDate).toISOString(),
-      end_date: new Date(endDate).toISOString(),
-      prize_pool: Number(prizePool),
-      max_teams: Number(maxTeams),
-      entry_fee: Number(entryFee) || 0,
-      created_by: user?.id,
-    });
-    setCreating(false);
-
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await createTournament({
+        title: name,
+        gameName: gameType,
+        description,
+        mode: 'SQUAD',
+        teamSize: 4,
+        startDateTime: new Date(startDate).toISOString(),
+        endDate: new Date(endDate).toISOString(),
+        registrationDeadline: new Date(startDate).toISOString(),
+        prizePool: Number(prizePool),
+        totalSlots: Number(maxTeams),
+        entryFee: Number(entryFee) || 0,
+        status: 'PUBLISHED'
+      });
+      toast.success(`Tournament "${name}" created!`);
+      setCreateOpen(false);
+      setName(''); setDescription(''); setStartDate(''); setEndDate(''); setPrizePool(''); setMaxTeams(''); setEntryFee('');
+      fetchTournamentsList();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create tournament');
+    } finally {
+      setCreating(false);
     }
-
-    toast.success(`Tournament "${name}" created!`);
-    setCreateOpen(false);
-    setName(''); setDescription(''); setStartDate(''); setEndDate(''); setPrizePool(''); setMaxTeams(''); setEntryFee('');
-    fetchTournaments();
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('tournaments').delete().eq('id', id);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await deleteTournament(id);
+      toast.success('Tournament deleted.');
+      fetchTournamentsList();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete tournament');
     }
-    toast.success('Tournament deleted.');
-    fetchTournaments();
   };
 
   return (
@@ -155,17 +163,17 @@ const AdminTournaments = () => {
                 ))
               ) : tournaments.length > 0 ? (
                 tournaments.map((t) => (
-                  <tr key={t.id} className="border-b border-border/50 transition-colors hover:bg-muted/20">
-                    <td className="px-4 py-3 font-medium">{t.name}</td>
-                    <td className="px-4 py-3"><Badge variant="outline">{t.game_type}</Badge></td>
+                  <tr key={t._id || t.id} className="border-b border-border/50 transition-colors hover:bg-muted/20">
+                    <td className="px-4 py-3 font-medium">{t.title || t.name}</td>
+                    <td className="px-4 py-3"><Badge variant="outline">{t.gameName || t.gameType || t.game_type}</Badge></td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[t.status]}`}>{t.status}</span>
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[(t.status || '').toLowerCase()] || statusColors.completed}`}>{t.status}</span>
                     </td>
-                    <td className="px-4 py-3 text-right font-display font-bold">₹{Number(t.prize_pool).toLocaleString('en-IN')}</td>
-                    <td className="px-4 py-3 text-right">{t.registered_teams}/{t.max_teams}</td>
+                    <td className="px-4 py-3 text-right font-display font-bold">₹{Number(t.prizePool || t.prize_pool || 0).toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3 text-right">{t.filledSlots || t.registered_teams || 0}/{t.totalSlots || t.max_teams || 0}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(t.id)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(t._id || t.id)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>

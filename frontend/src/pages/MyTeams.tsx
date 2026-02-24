@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { fetchMyTeams, createTeam } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,6 @@ import { Plus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Trophy } from 'lucide-react';
 
 const MyTeams = () => {
   const { user } = useAuth();
@@ -25,13 +25,14 @@ const MyTeams = () => {
 
   const fetchTeams = async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('teams')
-      .select('*')
-      .eq('captain_id', user.id)
-      .order('created_at', { ascending: false });
-    setTeams(data || []);
-    setLoading(false);
+    try {
+      const teamData = await fetchMyTeams();
+      setTeams(teamData || []);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load teams');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -48,34 +49,24 @@ const MyTeams = () => {
     if (!user) return;
 
     setCreating(true);
-    const { data, error } = await supabase
-      .from('teams')
-      .insert({ name: teamName, tag: teamTag.toUpperCase(), description: teamDesc, captain_id: user.id })
-      .select()
-      .single();
-    
-    if (error) {
-      toast.error(error.message);
-      setCreating(false);
-      return;
-    }
-
-    // Add captain as team member
-    if (data) {
-      await supabase.from('team_members').insert({
-        team_id: data.id,
-        user_id: user.id,
-        role: 'captain',
+    try {
+      await createTeam({
+        name: teamName,
+        tag: teamTag.toUpperCase(),
+        description: teamDesc,
+        members: [] // Leader automatically gets added on the backend
       });
+      toast.success(`Team "${teamName}" created!`);
+      setOpen(false);
+      setTeamName('');
+      setTeamTag('');
+      setTeamDesc('');
+      fetchTeams();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create team');
+    } finally {
+      setCreating(false);
     }
-
-    toast.success(`Team "${teamName}" created!`);
-    setOpen(false);
-    setTeamName('');
-    setTeamTag('');
-    setTeamDesc('');
-    setCreating(false);
-    fetchTeams();
   };
 
   return (
@@ -123,14 +114,14 @@ const MyTeams = () => {
       ) : teams.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {teams.map((team) => (
-            <div key={team.id} className="gaming-card flex flex-col items-center p-6 text-center">
+            <div key={team._id} className="gaming-card flex flex-col items-center p-6 text-center">
               <div className="gradient-primary mb-4 flex h-20 w-20 items-center justify-center rounded-full text-2xl font-black text-primary-foreground shadow-glow">
                 {team.tag}
               </div>
               <h3 className="font-display text-lg font-bold tracking-wide">{team.name}</h3>
               <span className="mb-4 text-sm text-muted-foreground">[{team.tag}]</span>
               <Button asChild variant="outline" className="w-full">
-                <Link to={`/dashboard/teams/${team.id}`}>Manage</Link>
+                <Link to={`/dashboard/teams/${team._id}`}>Manage</Link>
               </Button>
             </div>
           ))}

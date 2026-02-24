@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Trophy, CheckCircle } from 'lucide-react';
+import { fetchBracketMatches } from '@/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface BracketMatch {
@@ -33,22 +34,19 @@ function MatchCard({ match, animDelay }: { match: BracketMatch; animDelay: numbe
 
   return (
     <div
-      className={`w-48 rounded-lg border transition-all duration-500 ${
-        match.completed ? 'border-success/40 bg-success/5' : 'border-border bg-card'
-      } ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+      className={`w-48 rounded-lg border transition-all duration-500 ${match.completed ? 'border-success/40 bg-success/5' : 'border-border bg-card'
+        } ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
     >
-      <div className={`flex items-center justify-between border-b border-border/50 px-3 py-2.5 text-sm ${
-        match.completed && match.winner_name === team1 ? 'font-bold text-success' : ''
-      }`}>
+      <div className={`flex items-center justify-between border-b border-border/50 px-3 py-2.5 text-sm ${match.completed && match.winner_name === team1 ? 'font-bold text-success' : ''
+        }`}>
         <span className={`truncate ${team1 === 'TBD' ? 'italic text-muted-foreground' : ''}`}>{team1}</span>
         <div className="flex items-center gap-1.5">
           {match.score1 !== null && <span className="font-display text-xs font-bold">{match.score1}</span>}
           {match.completed && match.winner_name === team1 && <CheckCircle className="h-3.5 w-3.5 text-success" />}
         </div>
       </div>
-      <div className={`flex items-center justify-between px-3 py-2.5 text-sm ${
-        match.completed && match.winner_name === team2 ? 'font-bold text-success' : ''
-      }`}>
+      <div className={`flex items-center justify-between px-3 py-2.5 text-sm ${match.completed && match.winner_name === team2 ? 'font-bold text-success' : ''
+        }`}>
         <span className={`truncate ${team2 === 'TBD' ? 'italic text-muted-foreground' : ''}`}>{team2}</span>
         <div className="flex items-center gap-1.5">
           {match.score2 !== null && <span className="font-display text-xs font-bold">{match.score2}</span>}
@@ -65,58 +63,60 @@ export function TournamentBracket({ tournamentId }: { tournamentId: string }) {
   const [champion, setChampion] = useState<string | null>(null);
 
   const fetchBracket = async () => {
-    const { data } = await supabase
-      .from('bracket_matches')
-      .select('*')
-      .eq('tournament_id', tournamentId)
-      .order('round_index', { ascending: true })
-      .order('match_index', { ascending: true });
+    try {
+      const data = await fetchBracketMatches(tournamentId);
 
-    if (data && data.length > 0) {
-      const roundMap = new Map<string, BracketMatch[]>();
-      const roundOrder: string[] = [];
-      
-      data.forEach(m => {
-        if (!roundMap.has(m.round_name)) {
-          roundMap.set(m.round_name, []);
-          roundOrder.push(m.round_name);
+      if (data && data.length > 0) {
+        const roundMap = new Map<string, BracketMatch[]>();
+        const roundOrder: string[] = [];
+
+        data.forEach((matchData: any) => {
+          const m: BracketMatch = {
+            id: matchData._id || matchData.id,
+            team1_name: matchData.team1Name || matchData.team1_name,
+            team2_name: matchData.team2Name || matchData.team2_name,
+            score1: matchData.score1,
+            score2: matchData.score2,
+            completed: matchData.completed,
+            winner_name: matchData.winnerName || matchData.winner_name,
+            round_name: matchData.roundName || matchData.round_name,
+            round_index: matchData.roundIndex || matchData.round_index,
+            match_index: matchData.matchIndex || matchData.match_index,
+          };
+
+          if (!roundMap.has(m.round_name)) {
+            roundMap.set(m.round_name, []);
+            roundOrder.push(m.round_name);
+          }
+          roundMap.get(m.round_name)!.push(m);
+        });
+
+        const bracketRounds: BracketRound[] = roundOrder.map(name => ({
+          name,
+          matches: roundMap.get(name)!,
+        }));
+
+        setRounds(bracketRounds);
+
+        // Check for champion (winner of the last round's match)
+        const lastRound = bracketRounds[bracketRounds.length - 1];
+        if (lastRound?.matches[0]?.completed && lastRound.matches[0].winner_name) {
+          setChampion(lastRound.matches[0].winner_name);
         }
-        roundMap.get(m.round_name)!.push(m as BracketMatch);
-      });
-
-      const bracketRounds: BracketRound[] = roundOrder.map(name => ({
-        name,
-        matches: roundMap.get(name)!,
-      }));
-
-      setRounds(bracketRounds);
-
-      // Check for champion (winner of the last round's match)
-      const lastRound = bracketRounds[bracketRounds.length - 1];
-      if (lastRound?.matches[0]?.completed && lastRound.matches[0].winner_name) {
-        setChampion(lastRound.matches[0].winner_name);
       }
+    } catch (err) {
+      console.error('Failed to load bracket matches', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchBracket();
 
-    // Subscribe to realtime bracket updates
-    const channel = supabase
-      .channel(`bracket-${tournamentId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'bracket_matches',
-        filter: `tournament_id=eq.${tournamentId}`,
-      }, () => {
-        fetchBracket();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    // Poll for updates every minute
+    const intervalId = setInterval(fetchBracket, 60000);
+    return () => clearInterval(intervalId);
   }, [tournamentId]);
 
   if (loading) {

@@ -58,6 +58,9 @@ const tournamentSchema = new mongoose.Schema(
       type: Date,
       required: true
     },
+    endDate: {
+      type: Date
+    },
     roomId: {
       type: String,
       default: null

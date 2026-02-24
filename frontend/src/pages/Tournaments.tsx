@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Filter, X, Loader2 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
+import { fetchPublishedTournaments } from '@/services/api';
 
 type GameType = 'BGMI' | 'FreeFire' | 'CODMobile';
 type TournamentStatus = 'registration' | 'live' | 'completed';
@@ -30,34 +31,35 @@ const Tournaments = () => {
   const isSearching = search !== debouncedSearch;
 
   useEffect(() => {
-    const fetchTournaments = async () => {
+    const fetchTourneys = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('tournaments')
-        .select('*')
-        .order('start_date', { ascending: true });
-      if (data) setTournaments(data);
-      setLoading(false);
+      try {
+        const res = await fetchPublishedTournaments();
+        if (res.success) {
+          setTournaments(res.data);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     };
-    fetchTournaments();
-
-    // Subscribe to realtime
-    const channel = supabase
-      .channel('tournaments-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tournaments' }, () => {
-        fetchTournaments();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    fetchTourneys();
   }, []);
 
   const filtered = useMemo(() => {
     return tournaments.filter((t) => {
       const q = debouncedSearch.toLowerCase();
-      const matchSearch = t.name.toLowerCase().includes(q) || t.game_type.toLowerCase().includes(q);
-      const matchGame = !selectedGame || t.game_type === selectedGame;
-      const matchStatus = !selectedStatus || t.status === selectedStatus;
+      const matchSearch = t.title?.toLowerCase().includes(q) || t.gameName?.toLowerCase().includes(q);
+      const matchGame = !selectedGame || t.gameName === selectedGame;
+
+      // Match status: backend uses TOURNAMENT_STATUS like 'PUBLISHED', 'LIVE', 'COMPLETED'
+      let mappedStatus = '';
+      if (selectedStatus === 'registration') mappedStatus = 'PUBLISHED';
+      else if (selectedStatus === 'live') mappedStatus = 'LIVE';
+      else if (selectedStatus === 'completed') mappedStatus = 'COMPLETED';
+
+      const matchStatus = !mappedStatus || t.status === mappedStatus;
       return matchSearch && matchGame && matchStatus;
     });
   }, [debouncedSearch, selectedGame, selectedStatus, tournaments]);
@@ -70,18 +72,18 @@ const Tournaments = () => {
 
   const hasFilters = search || selectedGame || selectedStatus;
 
-  // Map DB fields to component props
+  // Map DB fields to component props - Now matching MongoDB schema
   const mapTournament = (t: any) => ({
-    id: t.id,
-    name: t.name,
-    gameType: t.game_type,
-    prizePool: Number(t.prize_pool),
-    startDate: t.start_date,
-    endDate: t.end_date,
-    status: t.status,
-    registeredTeams: t.registered_teams,
-    maxTeams: t.max_teams,
-    entryFee: Number(t.entry_fee),
+    id: t._id,
+    name: t.title,
+    gameType: t.gameName,
+    prizePool: Number(t.prizePool),
+    startDate: t.startDateTime,
+    endDate: t.startDateTime, // Assuming 1 day for now
+    status: t.status === 'PUBLISHED' ? 'registration' : t.status.toLowerCase(),
+    registeredTeams: t.filledSlots,
+    maxTeams: t.totalSlots,
+    entryFee: Number(t.entryFee),
     description: t.description || '',
   });
 

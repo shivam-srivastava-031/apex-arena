@@ -25,10 +25,25 @@ const teamMemberSchema = new mongoose.Schema(
 
 const teamSchema = new mongoose.Schema(
   {
-    tournamentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Tournament',
-      required: true
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 50
+    },
+    tag: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      minlength: 2,
+      maxlength: 5
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: 300,
+      default: ''
     },
     leaderId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -39,15 +54,6 @@ const teamSchema = new mongoose.Schema(
       type: [teamMemberSchema],
       required: true,
       default: []
-    },
-    mode: {
-      type: String,
-      enum: ['SOLO', 'DUO', 'SQUAD', 'CUSTOM'],
-      required: true
-    },
-    locked: {
-      type: Boolean,
-      default: false
     }
   },
   {
@@ -56,6 +62,7 @@ const teamSchema = new mongoose.Schema(
   }
 );
 
-teamSchema.index({ tournamentId: 1, leaderId: 1 });
+teamSchema.index({ leaderId: 1 });
+teamSchema.index({ tag: 1 }, { unique: true }); // Adding uniqueness for tags
 
 module.exports = mongoose.model('Team', teamSchema);

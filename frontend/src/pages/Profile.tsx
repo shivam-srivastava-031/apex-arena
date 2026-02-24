@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { updateProfile } from '@/services/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,14 +20,16 @@ const Profile = () => {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (profile) {
-      setFullName(profile.full_name || '');
-      setPhone(profile.phone || '');
-      setDob(profile.date_of_birth || '');
-      setBgmiId(profile.bgmi_id || '');
-      setFfId(profile.ff_id || '');
+    if (profile || user) {
+      // Prioritize profile data, fallback to user data (since AuthContext blends them depending on your fetch structure)
+      const dataSrc = profile || user;
+      setFullName(dataSrc.name || dataSrc.full_name || '');
+      setPhone(dataSrc.phone || '');
+      setDob(dataSrc.dob || dataSrc.date_of_birth || '');
+      setBgmiId(dataSrc.bgmiId || dataSrc.bgmi_id || '');
+      setFfId(dataSrc.ffId || dataSrc.ff_id || '');
     }
-  }, [profile]);
+  }, [profile, user]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,23 +43,21 @@ const Profile = () => {
   const handleSave = async () => {
     if (!user) return;
     setLoading(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: fullName,
+
+    try {
+      await updateProfile({
+        name: fullName,
         phone,
-        date_of_birth: dob || null,
-        bgmi_id: bgmiId,
-        ff_id: ffId,
-      })
-      .eq('id', user.id);
-    
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
-    } else {
+        dob: dob || null,
+        bgmiId,
+        ffId,
+      });
       toast.success('Profile updated successfully!');
       refreshProfile();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update profile');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -85,7 +86,7 @@ const Profile = () => {
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
           </div>
           <div>
-            <h2 className="font-display text-lg font-bold">{profile?.username || 'User'}</h2>
+            <h2 className="font-display text-lg font-bold">{user?.name || user?.username || 'User'}</h2>
             <p className="text-sm text-muted-foreground">{user?.email}</p>
           </div>
         </div>

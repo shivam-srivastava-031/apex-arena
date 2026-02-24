@@ -15,6 +15,7 @@ const router = express.Router();
 router.get('/', tournamentController.listTournaments);
 router.get('/published/list', tournamentController.listPublishedTournaments);
 router.get('/:id', tournamentController.getTournamentById);
+router.get('/:id/bracket', tournamentController.getBracket);
 router.get('/:id/room-access', authenticate, tournamentController.roomAccess);
 router.get('/:id/entries', authenticate, authorize(ROLES.ADMIN), tournamentController.tournamentEntries);
 

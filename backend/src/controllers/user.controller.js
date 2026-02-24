@@ -12,7 +12,19 @@ const updateBanStatus = asyncHandler(async (req, res) => {
   return ok(res, 'User ban status updated successfully', data);
 });
 
+const getProfile = asyncHandler(async (req, res) => {
+  const data = await userService.getProfile(req.user.id);
+  return ok(res, 'Profile fetched successfully', data);
+});
+
+const updateProfile = asyncHandler(async (req, res) => {
+  const data = await userService.updateProfile(req.user.id, req.body);
+  return ok(res, 'Profile updated successfully', data);
+});
+
 module.exports = {
   listUsers,
-  updateBanStatus
+  updateBanStatus,
+  getProfile,
+  updateProfile
 };

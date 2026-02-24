@@ -5,6 +5,9 @@ const Tournament = require('../models/Tournament');
 const Team = require('../models/Team');
 const Payment = require('../models/Payment');
 const AppError = require('../utils/appError');
+const crypto = require('crypto');
+const razorpay = require('../config/razorpay');
+const env = require('../config/env');
 const { TOURNAMENT_MODES, TOURNAMENT_STATUS, PAYMENT_STATUS } = require('../constants/enums');
 
 const validateBookingEligibility = ({ tournament, user }) => {
@@ -106,13 +109,43 @@ const initiateBooking = async ({ userId, tournamentId, selectedTeamSize, players
     metadata
   });
 
-  return {
-    paymentId: payment._id,
-    amount: payment.amount,
+  // If entry fee is 0, we can bypass Razorpay order generation
+  if (tournament.entryFee === 0) {
+    return {
+      paymentId: payment._id,
+      amount: 0,
+      currency: payment.currency,
+      paymentStatus: payment.status,
+      message: 'Free tournament registration initiated'
+    };
+  }
+
+  // Generate Razorpay Order
+  const razorpayOptions = {
+    amount: payment.amount * 100, // paise
     currency: payment.currency,
-    paymentStatus: payment.status,
-    message: 'Proceed to payment and confirm using payment confirmation API'
+    receipt: `receipt_${payment._id}`
   };
+
+  try {
+    const order = await razorpay.orders.create(razorpayOptions);
+
+    // Save provider id for tracking
+    payment.providerTransactionId = order.id;
+    await payment.save();
+
+    return {
+      paymentId: payment._id,
+      razorpayOrderId: order.id,
+      amount: payment.amount,
+      currency: payment.currency,
+      paymentStatus: payment.status,
+      message: 'Proceed to payment with Razorpay'
+    };
+  } catch (err) {
+    console.error('Razorpay Error:', err);
+    throw new AppError('Failed to generate payment order', 500);
+  }
 };
 
 const confirmBookingPayment = async ({ userId, paymentId, paymentStatus, providerTransactionId, metadata = {} }) => {
@@ -141,6 +174,18 @@ const confirmBookingPayment = async ({ userId, paymentId, paymentStatus, provide
 
     if (!payment) {
       throw new AppError('No initiated payment found for this user', 404);
+    }
+
+    // Razorpay signature verification
+    if (payment.amount > 0 && metadata.razorpay_signature) {
+      const generatedSignature = crypto
+        .createHmac('sha256', env.razorpayKeySecret)
+        .update(payment.providerTransactionId + '|' + providerTransactionId)
+        .digest('hex');
+
+      if (generatedSignature !== metadata.razorpay_signature) {
+        throw new AppError('Invalid payment signature', 400);
+      }
     }
 
     const [user, tournament, duplicateRegistration] = await Promise.all([
@@ -219,7 +264,7 @@ const confirmBookingPayment = async ({ userId, paymentId, paymentStatus, provide
 
 const listMyRegistrations = async (userId) => {
   return Registration.find({ userId })
-    .populate('tournamentId', 'title gameName mode teamSize status startDateTime registrationDeadline')
+    .populate('tournamentId', 'title gameName mode teamSize status startDateTime registrationDeadline endDate prizePool filledSlots totalSlots entryFee description')
     .populate('teamId', 'members mode locked')
     .populate('paymentId', 'amount currency status providerTransactionId paidAt')
     .sort({ createdAt: -1 });

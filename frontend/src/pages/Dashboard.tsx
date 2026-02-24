@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { fetchMyTeams, fetchMyRegistrations } from '@/services/api';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,22 +15,17 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
     const fetchStats = async () => {
-      // Count teams where user is captain
-      const { count: tc } = await supabase
-        .from('teams')
-        .select('*', { count: 'exact', head: true })
-        .eq('captain_id', user.id);
-      setTeamCount(tc || 0);
+      try {
+        const teams = await fetchMyTeams();
+        setTeamCount(teams.length || 0);
 
-      // Count registrations
-      const { count: rc } = await supabase
-        .from('registrations')
-        .select('*', { count: 'exact', head: true })
-        .eq('registered_by', user.id)
-        .eq('status', 'registered');
-      setTournamentCount(rc || 0);
-
-      setLoading(false);
+        const registrations = await fetchMyRegistrations();
+        setTournamentCount(registrations.length || 0);
+      } catch (error) {
+        console.error('Failed to fetch dashboard stats', error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchStats();
   }, [user]);

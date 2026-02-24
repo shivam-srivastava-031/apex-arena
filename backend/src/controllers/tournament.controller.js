@@ -52,6 +52,11 @@ const tournamentEntries = asyncHandler(async (req, res) => {
   return ok(res, 'Tournament entries fetched successfully', data);
 });
 
+const getBracket = asyncHandler(async (req, res) => {
+  const bracket = await tournamentService.getBracket(req.params.id);
+  return ok(res, 'Bracket fetched successfully', bracket);
+});
+
 module.exports = {
   createTournament,
   updateTournament,
@@ -62,5 +67,6 @@ module.exports = {
   updateRoom,
   updateStatus,
   roomAccess,
-  tournamentEntries
+  tournamentEntries,
+  getBracket
 };

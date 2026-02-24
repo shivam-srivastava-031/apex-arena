@@ -1,5 +1,6 @@
 const Tournament = require('../models/Tournament');
 const Registration = require('../models/Registration');
+const BracketMatch = require('../models/BracketMatch');
 const AppError = require('../utils/appError');
 const { TOURNAMENT_STATUS, TOURNAMENT_MODES } = require('../constants/enums');
 
@@ -143,6 +144,10 @@ const listTournamentEntries = async (tournamentId) => {
     .sort({ createdAt: -1 });
 };
 
+const getBracket = async (tournamentId) => {
+  return BracketMatch.find({ tournamentId }).sort({ roundIndex: 1, matchIndex: 1 });
+};
+
 module.exports = {
   createTournament,
   updateTournament,
@@ -153,5 +158,6 @@ module.exports = {
   updateRoomCredentials,
   updateStatus,
   getRoomAccess,
-  listTournamentEntries
+  listTournamentEntries,
+  getBracket
 };

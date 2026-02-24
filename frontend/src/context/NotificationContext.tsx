@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { fetchMyNotifications, markNotificationRead, markAllNotificationsRead, createNotification as apiCreateNotification } from '@/services/api';
 
 export type NotificationType = 'tournament_update' | 'match_reminder' | 'team_invite';
 
@@ -36,58 +37,31 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
 
     const fetchNotifications = async () => {
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      if (data) {
-        setNotifications(data.map(n => ({
-          id: n.id,
-          type: n.type as NotificationType,
-          title: n.title,
-          message: n.message,
-          read: n.read,
-          createdAt: n.created_at,
-          link: n.link || undefined,
-        })));
+      try {
+        const data = await fetchMyNotifications();
+        if (data) {
+          setNotifications(data.map((n: any) => ({
+            id: n._id || n.id,
+            type: n.type as NotificationType,
+            title: n.title,
+            message: n.message,
+            read: n.read,
+            createdAt: n.createdAt,
+            link: n.link || undefined,
+          })));
+        }
+      } catch (err) {
+        console.error('Failed to fetch notifications', err);
       }
     };
 
     fetchNotifications();
 
-    // Subscribe to realtime notifications
-    const channel = supabase
-      .channel('user-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const n = payload.new as any;
-          const newNotif: Notification = {
-            id: n.id,
-            type: n.type as NotificationType,
-            title: n.title,
-            message: n.message,
-            read: n.read,
-            createdAt: n.created_at,
-            link: n.link || undefined,
-          };
-          setNotifications(prev => [newNotif, ...prev].slice(0, 20));
-          toast.info(n.title, { description: n.message });
-        }
-      )
-      .subscribe();
+    // Poll for notifications every 30 seconds
+    const intervalId = setInterval(fetchNotifications, 30000);
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(intervalId);
     };
   }, [user]);
 
@@ -95,28 +69,38 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const markAsRead = useCallback(async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    await supabase.from('notifications').update({ read: true }).eq('id', id);
+    try {
+      await markNotificationRead(id);
+    } catch (err) {
+      console.error(err);
+    }
   }, []);
 
   const markAllAsRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     if (user) {
-      await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false);
+      try {
+        await markAllNotificationsRead();
+      } catch (err) {
+        console.error(err);
+      }
     }
   }, [user]);
 
   const addNotification = useCallback(async (n: Omit<Notification, 'id' | 'read' | 'createdAt'>) => {
     if (!user) return;
-    const { data } = await supabase.from('notifications').insert({
-      user_id: user.id,
-      type: n.type,
-      title: n.title,
-      message: n.message,
-      link: n.link,
-    }).select().maybeSingle();
-    
-    if (data) {
-      toast.info(n.title, { description: n.message });
+    try {
+      const data = await apiCreateNotification({
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        link: n.link,
+      });
+      if (data) {
+        toast.info(n.title, { description: n.message });
+      }
+    } catch (err) {
+      console.error(err);
     }
   }, [user]);
 

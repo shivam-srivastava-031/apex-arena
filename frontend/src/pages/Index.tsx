@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { fetchPublishedTournaments } from '@/services/api';
 import { MainLayout } from '@/components/MainLayout';
 import { TournamentCard } from '@/components/TournamentCard';
 import { FloatingIcons } from '@/components/FloatingIcons';
@@ -31,29 +32,33 @@ const Index = () => {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase
-        .from('tournaments')
-        .select('*')
-        .neq('status', 'completed')
-        .order('start_date', { ascending: true })
-        .limit(3);
-      setFeatured(data || []);
-      setLoading(false);
+      try {
+        const data = await fetchPublishedTournaments();
+        const active = data
+          .filter((t: any) => t.status !== 'completed')
+          .sort((a: any, b: any) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+          .slice(0, 3);
+        setFeatured(active || []);
+      } catch (error) {
+        console.error('Failed to load featured tournaments', error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetch();
   }, []);
 
   const mapTournament = (t: any) => ({
-    id: t.id,
+    id: t._id || t.id,
     name: t.name,
-    gameType: t.game_type,
-    prizePool: Number(t.prize_pool),
-    startDate: t.start_date,
-    endDate: t.end_date,
+    gameType: t.gameType || t.game_type,
+    prizePool: Number(t.prizePool || t.prize_pool),
+    startDate: t.startDate || t.start_date,
+    endDate: t.endDate || t.end_date,
     status: t.status,
-    registeredTeams: t.registered_teams,
-    maxTeams: t.max_teams,
-    entryFee: Number(t.entry_fee),
+    registeredTeams: t.registeredTeams || t.registered_teams,
+    maxTeams: t.maxTeams || t.max_teams,
+    entryFee: Number(t.entryFee || t.entry_fee),
     description: t.description || '',
   });
 

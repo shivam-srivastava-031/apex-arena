@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { fetchMyRegistrations } from '@/services/api';
 import { TournamentCard } from '@/components/TournamentCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy } from 'lucide-react';
@@ -12,30 +13,30 @@ const MyTournaments = () => {
   useEffect(() => {
     if (!user) return;
     const fetch = async () => {
-      const { data: regs } = await supabase
-        .from('registrations')
-        .select('tournament_id, tournaments(*)')
-        .eq('registered_by', user.id)
-        .eq('status', 'registered');
-      
-      const tourns = (regs || []).map(r => r.tournaments).filter(Boolean);
-      setTournaments(tourns);
-      setLoading(false);
+      try {
+        const regs = await fetchMyRegistrations();
+        const tourns = (regs || []).map((r: any) => r.tournamentId).filter(Boolean);
+        setTournaments(tourns);
+      } catch (error) {
+        console.error('Failed to fetch my tournaments', error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetch();
   }, [user]);
 
   const mapTournament = (t: any) => ({
-    id: t.id,
-    name: t.name,
-    gameType: t.game_type,
-    prizePool: Number(t.prize_pool),
-    startDate: t.start_date,
-    endDate: t.end_date,
+    id: t._id || t.id,
+    name: t.title || t.name,
+    gameType: t.gameName || t.gameType || t.game_type,
+    prizePool: Number(t.prizePool || t.prize_pool || 0),
+    startDate: t.startDateTime || t.startDate || t.start_date,
+    endDate: t.endDate || t.end_date,
     status: t.status,
-    registeredTeams: t.registered_teams,
-    maxTeams: t.max_teams,
-    entryFee: Number(t.entry_fee),
+    registeredTeams: t.filledSlots || t.registeredTeams || t.registered_teams || 0,
+    maxTeams: t.totalSlots || t.maxTeams || t.max_teams || 0,
+    entryFee: Number(t.entryFee || t.entry_fee || 0),
     description: t.description || '',
   });
 

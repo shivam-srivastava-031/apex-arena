@@ -10,6 +10,13 @@ const userSchema = new mongoose.Schema(
       minlength: 2,
       maxlength: 60
     },
+    email: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      lowercase: true
+    },
     phone: {
       type: String,
       required: true,
@@ -21,6 +28,16 @@ const userSchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true
+    },
+    ffId: {
+      type: String,
+      trim: true
+    },
+    dob: {
+      type: Date
+    },
+    avatar_url: {
+      type: String
     },
     password: {
       type: String,
