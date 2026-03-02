@@ -7,6 +7,7 @@ const resultRoutes = require('./result.routes');
 const userRoutes = require('./user.routes');
 const adminRoutes = require('./admin.routes');
 const notificationRoutes = require('./notification.routes');
+const webhookRoutes = require('./webhook.routes');
 
 const router = express.Router();
 
@@ -18,5 +19,6 @@ router.use('/results', resultRoutes);
 router.use('/users', userRoutes);
 router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/webhooks', webhookRoutes);
 
 module.exports = router;

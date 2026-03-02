@@ -133,7 +133,7 @@ const TournamentDetails = () => {
         </div>
 
         {/* Register / Registered / Cancel */}
-        {tournament.status === 'PUBLISHED' && isAuthenticated && (
+        {['PUBLISHED', 'LIVE'].includes(tournament.status) && isAuthenticated && (
           <div className="mb-8 flex flex-wrap gap-3">
             {isRegistered ? (
               <>
